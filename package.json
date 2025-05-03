@@ -2,11 +2,13 @@
   "name": "nodejs-typescript-template",
   "version": "1.470.0",
   "description": "A template for a nodejs application, using typescript",
-  "main": "dist/src/index.js",
+  "main": "dist/app.js",
   "author": "",
   "license": "MIT",
+  "module": "dist/app.js",
+  "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src/**/*.ts --exec ts-node ./src/app.ts",
+    "dev": "nodemon --watch src/**/*.ts --exec tsx ./src/app.ts",
     "build": "tsc",
     "start": "node ./dist/app.js",
     "lint": "eslint --fix --quiet src/**/*.ts",
@@ -16,7 +18,9 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "dotenv": "^16.5.0"
+    "dotenv": "^16.5.0",
+    "icloudjs": "1.6.2",
+    "samsung-frame-connect": "^0.9.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -31,6 +35,8 @@
     "prettier": "^3.5.3",
     "ts-jest": "^29.3.2",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
+    "type-fest": "^4.40.1",
     "typescript": "^5.8.3",
     "typescript-eslint-parser": "^22.0.0"
   }
