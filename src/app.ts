@@ -60,7 +60,7 @@ let c = new iCloudService.default({
 });
 
 await c.authenticate();
-if (c.status === iCloudServiceStatus.MfaRequested) {
+if (c.status === 'MfaRequested') {
   // Handle MFA
   console.info('MFA requested, please check your device for the code');
   let mfaCode = await new Promise<string>((resolve) => {
