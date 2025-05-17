@@ -4,7 +4,7 @@
  */
 
 import { config } from '@dotenvx/dotenvx';
-import iCloudService from 'icloudjs';
+import iCloudService, { iCloudServiceStatus } from 'icloudjs';
 import { iCloudPhotosService } from 'icloudjs/build/services/photos.js';
 import {
   SamsungFrameClient,
@@ -60,7 +60,7 @@ let c = new iCloudService.default({
 });
 
 await c.authenticate();
-if (c.status === iCloudService.iCloudServiceStatus.MfaRequested) {
+if (c.status === iCloudServiceStatus.MfaRequested) {
   // Handle MFA
   console.info('MFA requested, please check your device for the code');
   let mfaCode = await new Promise<string>((resolve) => {
