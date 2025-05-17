@@ -3,9 +3,13 @@
  * so that env vars from the .env file are present in process.env
  */
 
-import { config } from 'dotenv';
+import { config } from '@dotenvx/dotenvx';
 import iCloudService from 'icloudjs';
-import { SamsungFrameClient } from 'samsung-frame-connect';
+import {
+  SamsungFrameClient,
+  type SamsungFrameClientType,
+  type ServicesSchema,
+} from 'samsung-frame-connect';
 config();
 
 export const sum = (a: number, b: number): number => {
@@ -46,3 +50,12 @@ console.info(`In Art Mode: ${k}`);
 let a = await s.getArtModeInfo();
 
 console.info(`Art Mode Info: ${JSON.stringify(a, null, 2)}`);
+
+await s
+  .getAvailableArt()
+  .then((art) => {
+    console.info(`Available Art: ${JSON.stringify(art, null, 2)}`);
+  })
+  .catch((err) => {
+    console.error(`Error getting available art: ${err}`);
+  });
