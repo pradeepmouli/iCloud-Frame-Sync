@@ -70,6 +70,11 @@ if (c.status === 'MfaRequested') {
   });
   await c.provideMfaCode(mfaCode);
 }
+
+await c.awaitReady;
+console.log(c.status);
+console.log('Hello, ' + c.accountInfo.dsInfo.fullName);
+
 let p = c.getService('photos') as iCloudPhotosService;
 let albums = await p.getAlbums();
 console.info(`Albums: ${JSON.stringify(albums, null, 2)}`);
