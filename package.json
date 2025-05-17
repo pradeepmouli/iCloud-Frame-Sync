@@ -18,7 +18,6 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "dotenv": "^16.5.0",
     "@dotenvx/dotenvx": "1.44.0",
     "icloudjs": "1.6.2",
     "samsung-frame-connect": "^0.9.0"
