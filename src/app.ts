@@ -77,7 +77,7 @@ console.log('Hello, ' + c.accountInfo.dsInfo.fullName);
 
 let p = c.getService('photos') as iCloudPhotosService;
 let albums = await p.getAlbums();
-console.info(`Albums: ${JSON.stringify(albums, null, 2)}`);
+console.info(`Albums: ${JSON.stringify(new Array(albums.values()), null, 2)}`);
 let m = albums.get('Frame Crop');
 let ph = await m.getPhotos();
 console.info(`Photos: ${JSON.stringify(ph, null, 2)}`);
