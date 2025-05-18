@@ -10,14 +10,14 @@ import iCloud, {
   type iCloudPhotosService,
 } from 'icloudjs';
 
-import path from 'path';
+import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { P, pino } from 'pino';
 import {
   SamsungFrameClient,
   type SamsungFrameClientType,
   type ServicesSchema,
 } from 'samsung-frame-connect';
-import { setTimeout } from 'timers/promises';
 config();
 
 const logger = pino({

@@ -1,19 +1,19 @@
-FROM node:slim
+FROM denoland/deno:latest
 
 WORKDIR /usr/app
 
 # first copy just the package and the lock file, for caching purposes
 COPY package.json ./
-COPY yarn.lock ./
+COPY package-lock.json ./
 
 # install dependencies
-RUN yarn
+RUN npm install
 
 # copy the entire project
 COPY . .
 
 # build
-RUN yarn build
+RUN npm run build
 
 EXPOSE 3000
-CMD [ "yarn", "start" ]
+CMD [ "npm", "start:deno" ]
