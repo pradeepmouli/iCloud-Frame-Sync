@@ -93,9 +93,9 @@ for (const a of ph) {
   console.info(
     `Photo: ${JSON.stringify({ filename: a.filename, dimensions: a.dimension }, null, 2)}`,
   );
-  let i = await a.download();
+  let i = await a.download('original');
   console.info(`Photo: ${JSON.stringify(a, null, 2)}`);
-  let res = await s.upload(Buffer.from(i), { fileType: 'image/jpeg' });
+  let res = await s.upload(Buffer.from(i), { fileType: 'jpg' });
   console.info(`Upload: ${JSON.stringify(res, null, 2)}`);
   await a.delete();
 }
