@@ -82,6 +82,13 @@ console.log('All your album names: ', Array.from(albums.keys()).join(', '));
 //console.info(`Albums: ${JSON.stringify(new Array(albums.values()), null, 2)}`);
 let m = albums.get('Frame Crop');
 let ph = await m.getPhotos();
+console.info(
+  `Photos: ${JSON.stringify(
+    ph.map((p) => p.filename),
+    null,
+    2,
+  )}`,
+);
 for (const a of ph) {
   console.info(
     `Photo: ${JSON.stringify({ filename: a.filename, dimensions: a.dimension }, null, 2)}`,
