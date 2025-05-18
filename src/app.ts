@@ -13,6 +13,7 @@ import {
   type SamsungFrameClientType,
   type ServicesSchema,
 } from 'samsung-frame-connect';
+import { setTimeout } from 'timers/promises';
 config();
 
 const logger = pino({
@@ -33,15 +34,21 @@ const frameClient = new SamsungFrameClient({
   services: ['art-mode', 'device'],
 });
 
-process.on('SIGINT', async () => {
+process.once('SIGINT', async () => {
   logger.info('SIGINT received, closing connection...');
+  setTimeout(5000, () => {
+    logger.info('Force closing connection...');
+    process.exit(1);
+  });
   await frameClient.close();
+  logger.info('Connection closed');
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, closing connection...');
   await frameClient.close();
+  logger.info('Connection closed');
   process.exit(0);
 });
 
@@ -71,7 +78,7 @@ frameLogger.info(`Art Mode Info: ${JSON.stringify(a, null, 2)}`);
 await frameClient.getAvailableArt();
 frameLogger.info(`Available Art: ${JSON.stringify(a, null, 2)}`);
 
-let c = new iCloud.default({
+const iCloudClient = new iCloud.default({
   dataDirectory: './data',
   username: process.env.ICLOUD_USERNAME,
   password: process.env.ICLOUD_PASSWORD,
@@ -102,9 +109,12 @@ let c = new iCloud.default({
   },
 });
 
-await c.authenticate();
+iCloudLogger.info('Starting iCloud client...');
+iCloudLogger.info('Authenticating...');
 
-if (c.status === 'MfaRequested') {
+await iCloudClient.authenticate();
+
+if (iCloudClient.status === 'MfaRequested') {
   // Handle MFA
   iCloudLogger.info('MFA requested, please check your device for the code');
   let mfaCode = await new Promise<string>((resolve) => {
@@ -112,14 +122,14 @@ if (c.status === 'MfaRequested') {
       resolve(data.toString().trim());
     });
   });
-  await c.provideMfaCode(mfaCode);
+  await iCloudClient.provideMfaCode(mfaCode);
 }
 
-await c.awaitReady;
-iCloudLogger.info(c.status);
-iCloudLogger.info('Hello, ' + c.accountInfo.dsInfo.fullName);
+await iCloudClient.awaitReady;
+iCloudLogger.info(iCloudClient.status);
+iCloudLogger.info('Hello, ' + iCloudClient.accountInfo.dsInfo.fullName);
 
-let p = c.getService('photos') as iCloudPhotosService;
+let p = iCloudClient.getService('photos') as iCloudPhotosService;
 
 let albums = await p.getAlbums();
 iCloudLogger.info('Available Albums: ', Array.from(albums.keys()).join(', '));
@@ -172,9 +182,20 @@ async function syncPhotos() {
   timer.refresh();
 }
 
-const timer = setTimeout(
+let isSyncing = false;
+
+const timer = setInterval(
   async () => {
-    await syncPhotos();
+    if (isSyncing) {
+      iCloudLogger.info('Sync already in progress, skipping this interval.');
+      return;
+    }
+    isSyncing = true;
+    try {
+      await syncPhotos();
+    } finally {
+      isSyncing = false;
+    }
   },
   1000 * Number(process.env.ICLOUD_SYNC_INTERVAL ?? 60),
 );
