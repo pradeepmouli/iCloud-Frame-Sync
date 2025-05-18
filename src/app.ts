@@ -30,6 +30,7 @@ const frameClient = new SamsungFrameClient({
   host: process.env.SAMSUNG_FRAME_HOST,
   name: 'SamsungTv',
   services: ['art-mode', 'device'],
+  verbosity: Number(process.env.SAMSUNG_FRAME_VERBOSITY ?? 0),
 });
 
 process.once('SIGINT', async () => {
@@ -130,7 +131,7 @@ iCloudLogger.info('Hello, ' + iCloudClient.accountInfo.dsInfo.fullName);
 let p = iCloudClient.getService('photos') as iCloudPhotosService;
 
 let albums = await p.getAlbums();
-iCloudLogger.info('Available Albums: ', Array.from(albums.keys()).join(', '));
+iCloudLogger.info(`Available Albums: ${Array.from(albums.keys()).join(', ')}`);
 //logger.info(`Albums: ${JSON.stringify(new Array(albums.values()), null, 2)}`);
 let m = albums.get(process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync');
 
@@ -139,21 +140,26 @@ if (!m) {
     `Album not found: ${process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync'}`,
   );
   process.exit(0);
+} else {
+  iCloudLogger.info(
+    `Using album: ${process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync'}`,
+  );
 }
 
 async function syncPhotos() {
   let photos = await m.getPhotos();
-  iCloudLogger.info(
-    `Photos: ${JSON.stringify(
-      photos.map((p) => p.filename),
-      null,
-      2,
-    )}`,
-  );
+
   if (photos.length === 0) {
     iCloudLogger.info('No photos to sync');
   } else {
     iCloudLogger.info(`Found ${photos.length} photos to sync`);
+    iCloudLogger.info(
+      `Photos: ${JSON.stringify(
+        photos.map((p) => p.filename),
+        null,
+        2,
+      )}`,
+    );
     iCloudLogger.info('Syncing photos...');
     let count = 1;
 
@@ -165,12 +171,14 @@ async function syncPhotos() {
         `Photo: ${JSON.stringify({ filename: photo.filename, dimensions: photo.dimension }, null, 2)}`,
       );
       let i = await photo.download('original');
+
       logger.debug(`Photo: ${JSON.stringify(photo, null, 2)}`);
       let res = await frameClient.upload(Buffer.from(i), {
         fileType: path.extname(photo.filename),
       });
       logger.info(`Photo uploaded - id: ${res}`);
       count++;
+
       await photo.delete();
       iCloudLogger.info(`Photo deleted: ${photo.filename}`);
     }
