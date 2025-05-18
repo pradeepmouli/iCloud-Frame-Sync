@@ -21,12 +21,10 @@ const logger = pino({
 });
 const bindings = {
   name: 'Samsung Frame Client',
-  version: '1.0.0',
-  description: 'A client for the Samsung Frame TV',
 };
 
-const frameLogger = logger.child(bindings, { msgPrefix: 'FrameClient' });
-const iCloudLogger = logger.child(bindings, { msgPrefix: 'iCloudClient' });
+const frameLogger = logger.child({ name: 'Samsung Frame Client' });
+const iCloudLogger = logger.child({ name: 'iCloud Client' });
 
 const frameClient = new SamsungFrameClient({
   host: process.env.SAMSUNG_FRAME_HOST,
