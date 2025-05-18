@@ -4,8 +4,12 @@
  */
 
 import { config } from '@dotenvx/dotenvx';
-import iCloud, { iCloudServiceStatus, LogLevel } from 'icloudjs';
-import type { iCloudPhotosService } from 'icloudjs/build/services/photos.js';
+import iCloud, {
+  LogLevel,
+  type iCloudPhotoAsset,
+  type iCloudPhotosService,
+} from 'icloudjs';
+
 import path from 'path';
 import { P, pino } from 'pino';
 import {
@@ -163,13 +167,21 @@ async function syncPhotos() {
         2,
       )}`,
     );
+
     iCloudLogger.info('Syncing photos...');
     let count = 1;
 
-    for (const photo of photos) {
+    for (const p of photos) {
+      let photo = p;
+
       iCloudLogger.info(
         `Syncing photo: ${photo.filename} (${count}/${photos.length})`,
       );
+      //@ts-ignore
+      if (photo.masterRecord.deleted) {
+        iCloudLogger.info(`Photo deleted: ${photo.filename}`);
+        continue;
+      }
       if (handledPhotos.has(photo.filename)) {
         iCloudLogger.info(`Photo already synced: ${photo.filename}`);
         continue;
