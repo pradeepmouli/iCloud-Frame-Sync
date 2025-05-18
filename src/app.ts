@@ -18,6 +18,7 @@ config();
 
 const logger = pino({
   transport: { target: 'pino-pretty', options: { colorize: true } },
+  level: process.env.LOG_LEVEL ?? 'info',
 });
 const bindings = {
   name: 'Samsung Frame Client',
@@ -146,6 +147,8 @@ if (!m) {
   );
 }
 
+const handledPhotos = new Set<string>();
+
 async function syncPhotos() {
   let photos = await m.getPhotos();
 
@@ -167,7 +170,12 @@ async function syncPhotos() {
       iCloudLogger.info(
         `Syncing photo: ${photo.filename} (${count}/${photos.length})`,
       );
-      logger.info(
+      if (handledPhotos.has(photo.filename)) {
+        iCloudLogger.info(`Photo already synced: ${photo.filename}`);
+        continue;
+      }
+
+      iCloudLogger.info(
         `Photo: ${JSON.stringify({ filename: photo.filename, dimensions: photo.dimension }, null, 2)}`,
       );
       let i = await photo.download('original');
@@ -179,14 +187,16 @@ async function syncPhotos() {
       logger.info(`Photo uploaded - id: ${res}`);
       count++;
 
-      await photo.delete();
-      iCloudLogger.info(`Photo deleted: ${photo.filename}`);
+      if (await photo.delete()) {
+        iCloudLogger.info(`Photo deleted: ${photo.filename}`);
+      }
+      handledPhotos.add(photo.filename);
     }
     iCloudLogger.info('Photos synced');
   }
-
-  timer.refresh();
 }
+
+await syncPhotos();
 
 let isSyncing = false;
 
@@ -199,6 +209,7 @@ const timer = setInterval(
     isSyncing = true;
     try {
       await syncPhotos();
+      timer.refresh();
     } finally {
       isSyncing = false;
     }
