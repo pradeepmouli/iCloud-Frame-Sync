@@ -4,8 +4,10 @@
  */
 
 import { config } from '@dotenvx/dotenvx';
-import iCloudService, { iCloudServiceStatus } from 'icloudjs';
-import { iCloudPhotosService } from 'icloudjs/build/services/photos.js';
+import iCloud, { iCloudServiceStatus, LogLevel } from 'icloudjs';
+import type { iCloudPhotosService } from 'icloudjs/build/services/photos.js';
+import path from 'path';
+import { P, pino } from 'pino';
 import {
   SamsungFrameClient,
   type SamsungFrameClientType,
@@ -13,56 +15,98 @@ import {
 } from 'samsung-frame-connect';
 config();
 
-let s = new SamsungFrameClient({
+const logger = pino({
+  transport: { target: 'pino-pretty', options: { colorize: true } },
+});
+const bindings = {
+  name: 'Samsung Frame Client',
+  version: '1.0.0',
+  description: 'A client for the Samsung Frame TV',
+};
+
+const frameLogger = logger.child(bindings, { msgPrefix: 'FrameClient' });
+const iCloudLogger = logger.child(bindings, { msgPrefix: 'iCloudClient' });
+
+const frameClient = new SamsungFrameClient({
   host: process.env.SAMSUNG_FRAME_HOST,
   name: 'SamsungTv',
   services: ['art-mode', 'device'],
-  verbosity: 2,
 });
 
 process.on('SIGINT', async () => {
-  console.info('SIGINT received, closing connection...');
-  await s.close();
+  logger.info('SIGINT received, closing connection...');
+  await frameClient.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.info('SIGTERM received, closing connection...');
-  await s.close();
+  logger.info('SIGTERM received, closing connection...');
+  await frameClient.close();
   process.exit(0);
 });
 
-let d = await s.getDeviceInfo();
+let deviceInfo = await frameClient.getDeviceInfo();
 
-console.info(`Device Info: ${JSON.stringify(d, null, 2)}`);
+frameLogger.info(`Device Info: ${JSON.stringify(deviceInfo, null, 2)}`);
 
-let b = await s.isOn();
+let b = await frameClient.isOn();
 
-console.info(`Is On: ${b}`);
+frameLogger.info(`Is On: ${await frameClient.isOn()}`);
 
-await s.connect();
-let k = await s.inArtMode();
-console.info(`In Art Mode: ${k}`);
+if (!b) {
+  logger.info('Device is off, turning it on...');
+  await frameClient.togglePower();
+  frameLogger.info('Device is on');
+}
 
-let a = await s.getArtModeInfo();
+await frameClient.connect();
+let k = await frameClient.inArtMode();
 
-console.info(`Art Mode Info: ${JSON.stringify(a, null, 2)}`);
+frameLogger.info(`In Art Mode: ${k}`);
 
-await s.getAvailableArt();
-console.info(`Available Art: ${JSON.stringify(a, null, 2)}`);
-let c = new iCloudService.default({
+let a = await frameClient.getArtModeInfo();
+
+frameLogger.info(`Art Mode Info: ${JSON.stringify(a, null, 2)}`);
+
+await frameClient.getAvailableArt();
+frameLogger.info(`Available Art: ${JSON.stringify(a, null, 2)}`);
+
+let c = new iCloud.default({
   dataDirectory: './data',
   username: process.env.ICLOUD_USERNAME,
   password: process.env.ICLOUD_PASSWORD,
   saveCredentials: true,
   trustDevice: true,
   authMethod: 'srp',
+  logger: (level, ...args: any[]) => {
+    switch (level) {
+      case LogLevel.Error:
+        iCloudLogger.error(args);
+        break;
+      case LogLevel.Info:
+        iCloudLogger.info(args);
+        break;
+      case LogLevel.Debug:
+        iCloudLogger.debug(args);
+        break;
+      case LogLevel.Silent:
+        iCloudLogger.trace(args);
+        break;
+      case LogLevel.Warning:
+        iCloudLogger.warn(args);
+        break;
+      default:
+        iCloudLogger.info(args);
+        break;
+    }
+  },
 });
 
 await c.authenticate();
+
 if (c.status === 'MfaRequested') {
   // Handle MFA
-  console.info('MFA requested, please check your device for the code');
+  iCloudLogger.info('MFA requested, please check your device for the code');
   let mfaCode = await new Promise<string>((resolve) => {
     process.stdin.once('data', (data) => {
       resolve(data.toString().trim());
@@ -72,30 +116,65 @@ if (c.status === 'MfaRequested') {
 }
 
 await c.awaitReady;
-console.log(c.status);
-console.log('Hello, ' + c.accountInfo.dsInfo.fullName);
+iCloudLogger.info(c.status);
+iCloudLogger.info('Hello, ' + c.accountInfo.dsInfo.fullName);
 
 let p = c.getService('photos') as iCloudPhotosService;
 
 let albums = await p.getAlbums();
-console.log('All your album names: ', Array.from(albums.keys()).join(', '));
-//console.info(`Albums: ${JSON.stringify(new Array(albums.values()), null, 2)}`);
-let m = albums.get('Frame Crop');
-let ph = await m.getPhotos();
-console.info(
-  `Photos: ${JSON.stringify(
-    ph.map((p) => p.filename),
-    null,
-    2,
-  )}`,
-);
-for (const a of ph) {
-  console.info(
-    `Photo: ${JSON.stringify({ filename: a.filename, dimensions: a.dimension }, null, 2)}`,
+iCloudLogger.info('Available Albums: ', Array.from(albums.keys()).join(', '));
+//logger.info(`Albums: ${JSON.stringify(new Array(albums.values()), null, 2)}`);
+let m = albums.get(process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync');
+
+if (!m) {
+  iCloudLogger.error(
+    `Album not found: ${process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync'}`,
   );
-  let i = await a.download('original');
-  console.info(`Photo: ${JSON.stringify(a, null, 2)}`);
-  let res = await s.upload(Buffer.from(i), { fileType: 'jpg' });
-  console.info(`Upload: ${JSON.stringify(res, null, 2)}`);
-  await a.delete();
+  process.exit(1);
 }
+
+async function syncPhotos() {
+  let photos = await m.getPhotos();
+  iCloudLogger.info(
+    `Photos: ${JSON.stringify(
+      photos.map((p) => p.filename),
+      null,
+      2,
+    )}`,
+  );
+  if (photos.length === 0) {
+    iCloudLogger.info('No photos to sync');
+  } else {
+    iCloudLogger.info(`Found ${photos.length} photos to sync`);
+    iCloudLogger.info('Syncing photos...');
+    let count = 1;
+
+    for (const photo of photos) {
+      iCloudLogger.info(
+        `Syncing photo: ${photo.filename} (${count}/${photos.length})`,
+      );
+      logger.info(
+        `Photo: ${JSON.stringify({ filename: photo.filename, dimensions: photo.dimension }, null, 2)}`,
+      );
+      let i = await photo.download('original');
+      logger.debug(`Photo: ${JSON.stringify(photo, null, 2)}`);
+      let res = await frameClient.upload(Buffer.from(i), {
+        fileType: path.extname(photo.filename),
+      });
+      logger.info(`Photo uploaded - id: ${res}`);
+      count++;
+      await photo.delete();
+      iCloudLogger.info(`Photo deleted: ${photo.filename}`);
+    }
+    iCloudLogger.info('Photos synced');
+  }
+
+  timer.refresh();
+}
+
+const timer = setTimeout(
+  async () => {
+    await syncPhotos();
+  },
+  1000 * Number(process.env.ICLOUD_SYNC_INTERVAL ?? 60),
+);

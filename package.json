@@ -20,6 +20,7 @@
   "dependencies": {
     "@dotenvx/dotenvx": "1.44.0",
     "icloudjs": "1.6.2",
+    "pino": "^9.6.0",
     "samsung-frame-connect": "^0.9.0"
   },
   "devDependencies": {
