@@ -138,7 +138,7 @@ if (!m) {
   iCloudLogger.error(
     `Album not found: ${process.env.ICLOUD_SOURCE_ALBUM ?? 'Frame Sync'}`,
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 async function syncPhotos() {
