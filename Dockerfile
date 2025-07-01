@@ -1,5 +1,4 @@
-FROM denoland/deno:latest
-
+FROM node:slim
 WORKDIR /usr/app
 
 # first copy just the package and the lock file, for caching purposes
@@ -15,5 +14,8 @@ COPY . .
 # build
 RUN npm run build
 
+ENV NODE_ENV=production
+ENV LOG_LEVEL=info
+
 EXPOSE 3000
-CMD [ "npm", "start:deno" ]
+CMD [ "npm", "start" ]
