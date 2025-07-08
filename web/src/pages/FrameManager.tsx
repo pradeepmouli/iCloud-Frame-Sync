@@ -25,7 +25,7 @@ import {
   alpha,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
-import { api, type FrameStatus, type FrameArt } from '../services/api';
+import { api, type FrameArt, type FrameStatus } from '../services/api';
 
 export default function FrameManager() {
   const [frameStatus, setFrameStatus] = useState<FrameStatus | null>(null);

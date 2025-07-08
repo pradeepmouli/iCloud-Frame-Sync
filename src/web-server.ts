@@ -2,7 +2,11 @@ import cors from 'cors';
 import express, { type Request, type Response } from 'express';
 import path from 'node:path/win32';
 import { pino, type Logger } from 'pino';
-import { Application, type AppConfig } from './Application.js';
+import {
+  Application,
+  createAppConfigFromEnv,
+  type AppConfig,
+} from './Application.js';
 import { FrameEndpoint } from './services/FrameEndpoint.js';
 import { iCloudEndpoint } from './services/iCloudEndpoint.js';
 import type { SyncScheduler } from './services/SyncScheduler.js';
@@ -21,8 +25,8 @@ export class WebServer {
   private logger: Logger;
   private config: WebServerConfig;
   // Remove syncApp, use endpoints directly
-  private frameEndpoint: Endpoint | null = null;
-  private iCloudEndpoint: Endpoint | null = null;
+  private frameEndpoint: FrameEndpoint | null = null;
+  private iCloudEndpoint: iCloudEndpoint | null = null;
   private pendingMfaRequests = new Map<
     string,
     {
@@ -327,23 +331,14 @@ export class WebServer {
       }
       // Use environment/config for endpoint setup
       const logger = this.logger.child({ name: 'Endpoints' });
-      const frameConfig = {
-        host: process.env.SAMSUNG_FRAME_HOST || '',
-        name: 'SamsungTv',
-        verbosity: Number(process.env.SAMSUNG_FRAME_VERBOSITY || 2),
-      };
-      const iCloudConfig = {
-        username: process.env.ICLOUD_USERNAME || '',
-        password: process.env.ICLOUD_PASSWORD || '',
-        sourceAlbum: process.env.ICLOUD_SOURCE_ALBUM || 'Frame Sync',
-        dataDirectory: process.env.ICLOUD_DATA_DIRECTORY || './data',
-      };
+      const config: AppConfig = createAppConfigFromEnv();
+
       this.frameEndpoint = new FrameEndpoint(
-        frameConfig,
+        config.frame,
         logger.child({ name: 'Frame' }),
       );
       this.iCloudEndpoint = new iCloudEndpoint(
-        iCloudConfig,
+        config.iCloud,
         logger.child({ name: 'iCloud' }),
       );
       await this.frameEndpoint.initialize();
@@ -450,10 +445,10 @@ export class WebServer {
           .json({ success: false, error: 'Application not running' });
         return;
       }
-      const albums =
-        (await (this.iCloudEndpoint.albums || Promise.resolve([]))) || [];
-      const album = albums.find((a: any) => a.name === albumName);
+
+      const album = this.iCloudEndpoint.getAlbumByName(albumName);
       const photos = album ? await album.photos : [];
+
       res.json({ photos });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
@@ -546,8 +541,10 @@ export class WebServer {
       const artWithThumbnails = await Promise.allSettled(
         artItems.map(async (art) => {
           try {
+            this.logger.debug(`Fetching thumbnail for art ${art.id}`);
             const thumbnail = await frameEndpoint.getThumbnail(art.id);
-            return {
+
+            const artItem = {
               id: art.id,
               name: art.id, // Use ID as name for now
               dimensions: {
@@ -564,10 +561,19 @@ export class WebServer {
                   ? `data:image/jpeg;base64,${thumbnail.toString('base64')}`
                   : null,
             };
-          } catch (error) {
-            this.logger.warn(
-              `Failed to get thumbnail for art ${art.id}: ${error.message}`,
+
+            this.logger.debug(
+              `Successfully processed art ${art.id} with thumbnail: ${artItem.thumbnail ? 'yes' : 'no'}`,
             );
+            return artItem;
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+              `Failed to get thumbnail for art ${art.id}: ${errorMessage}`,
+            );
+
+            // Still return the art item without thumbnail
             return {
               id: art.id,
               name: art.id,
@@ -586,7 +592,7 @@ export class WebServer {
         }),
       );
 
-      // Filter out rejected promises and extract values
+      // Extract all values (both fulfilled and rejected will have values since we handle errors)
       const processedArt = artWithThumbnails
         .filter(
           (result): result is PromiseFulfilledResult<any> =>

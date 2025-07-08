@@ -1,5 +1,5 @@
 import type {
-  iCloudPhotoAlbum,
+  iCloudPhotoAlbum as iCloudPhotoAlbumBase,
   iCloudPhotoAsset,
   iCloudPhotosService,
 } from 'icloudjs';
@@ -13,23 +13,20 @@ import type {
   Photo,
 } from '../types/endpoint.js';
 
-import exifparser from 'exif-parser';
-import exif from 'exif';
-
-type t = exif.ExifData;
+import exif from 'exif-reader';
 
 export class iCloudPhoto implements Photo {
   id: string;
   filename: string;
   dimensions: { width: number; height: number };
   size: number;
-  private asset: iCloudPhotoAsset;
+  private readonly asset: iCloudPhotoAsset;
 
   constructor(asset: iCloudPhotoAsset) {
-    exif.ExifImage;
     this.asset = asset;
-    this.id = asset.filename; // fallback to filename as id
+    this.id = asset.id; // fallback to filename as id
     this.filename = asset.filename;
+
     // Try to extract dimensions from asset.dimension (array or object)
     if (Array.isArray(asset.dimension) && asset.dimension.length === 2) {
       this.dimensions = {
@@ -46,6 +43,7 @@ export class iCloudPhoto implements Photo {
     } else {
       this.dimensions = { width: 0, height: 0 };
     }
+
     this.size = (asset as any).size || 0;
   }
 
@@ -66,7 +64,52 @@ export class iCloudPhoto implements Photo {
   }
 
   get thumbnailUrl(): string | undefined {
-    return (this.asset as any)._versions?.thumb?.url;
+    return (
+      (this.asset as any).versions?.thumb?.url ??
+      (this.asset as any)._versions?.thumb?.url
+    );
+  }
+
+  _exifData: exif.Exif | null = null;
+  async getExifData(): Promise<exif.Exif | null> {
+    if (this._exifData) return this._exifData;
+    if (!this.asset || typeof this.asset.download !== 'function') return null;
+
+    const data = await this.asset.download('original');
+    if (!data) return null;
+
+    this._exifData = exif(
+      data instanceof ArrayBuffer ? Buffer.from(data) : data,
+    );
+    return this._exifData;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      filename: this.filename,
+      dimensions: this.dimensions,
+      size: this.size,
+      thumbnailUrl: this.thumbnailUrl,
+      versions: this.asset.versions,
+    };
+  }
+}
+
+export class iCloudPhotoAlbum implements Album {
+  id: string;
+  name: string;
+  photos: Promise<iCloudPhoto[]>;
+
+  constructor(album: iCloudPhotoAlbumBase) {
+    this.id = album.title; // Use album title as ID
+    this.name = album.title;
+    // Get photos as a promise that resolves to iCloudPhoto[]
+    this.photos = album
+      .getPhotos()
+      .then((photos: iCloudPhotoAsset[]) =>
+        photos.map((p) => new iCloudPhoto(p)),
+      );
   }
 }
 
@@ -76,7 +119,7 @@ export class iCloudEndpoint implements Endpoint {
   private iCloudClient: iCloudService.default;
   private photosService: iCloudPhotosService;
   private _photos: iCloudPhoto[] = [];
-  private _albums: Album[] = [];
+  private _albums: Map<string, Album> = new Map();
 
   public get status(): keyof typeof iCloudService.iCloudServiceStatus {
     return this.iCloudClient.status;
@@ -155,16 +198,23 @@ export class iCloudEndpoint implements Endpoint {
       'photos',
     ) as iCloudPhotosService;
     const albumsMap = await this.photosService.getAlbums();
-    this._albums = Array.from(albumsMap.entries()).map(([key, album]) => ({
-      id: key,
-      name: key,
-      // Type workaround: album.getPhotos() returns a promise of iCloudPhotoAsset[]
-      photos: (album as unknown as iCloudPhotoAlbum)
-        .getPhotos()
-        .then((photos: any[]) => photos.map((p) => new iCloudPhoto(p))),
-    }));
+    this._albums = new Map(
+      Array.from(albumsMap.entries()).map(([key, album]) => [
+        key,
+        {
+          id: key,
+          name: key,
+          // Type workaround: album.getPhotos() returns a promise of iCloudPhotoAsset[]
+          photos: (album as unknown as iCloudPhotoAlbumBase)
+            .getPhotos()
+            .then((photos: any[]) => photos.map((p) => new iCloudPhoto(p))),
+        },
+      ]),
+    );
     this.logger.info(
-      `Found ${this._albums.length} albums in iCloud: ${this._albums
+      `Found ${this._albums.size} albums in iCloud: ${Array.from(
+        this._albums.values(),
+      )
         .map((a) => a.name)
         .join(', ')}`,
     );
@@ -195,6 +245,10 @@ export class iCloudEndpoint implements Endpoint {
   }
 
   get albums(): Promise<Album[]> {
-    return Promise.resolve(this._albums);
+    return Promise.resolve(Array.from(this._albums.values()));
+  }
+
+  getAlbumByName(name: string): Album | undefined {
+    return this._albums.get(name);
   }
 }

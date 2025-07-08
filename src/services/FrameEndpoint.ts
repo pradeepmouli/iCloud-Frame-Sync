@@ -78,7 +78,7 @@ export class FrameEndpoint implements Endpoint {
     this.client = new SamsungFrameClient({
       host: config.host,
       name: config.name || 'SamsungTv',
-      services: ['art-mode', 'device', 'remote-control'],
+      services: ['art-mode', 'device'],
       verbosity: config.verbosity || 0,
     }) as SamsungFrameClientType<any>;
     this.config = config;
@@ -157,27 +157,73 @@ export class FrameEndpoint implements Endpoint {
   getPhotos(): Promise<Photo[]> {
     return Promise.resolve(this._photos);
   }
-
   async getThumbnail(photoId: string): Promise<Buffer> {
     try {
-      const response = await this.client.request({
-        request: 'get_thumbnail',
-        content_id: photoId,
-        conn_info: {
-          d2d_mode: 'socket',
-          connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
-          id: this.generateUUID(),
-        },
-      });
+      this.logger.debug(`Requesting thumbnail for photo ID: ${photoId}`);
 
-      const connInfo = JSON.parse(response.conn_info);
-      const thumbnailData = await this.readThumbnailData(connInfo);
+      // First, try to check if the art exists in the available art list
+      const availableArt = await this.client.getAvailableArt();
+      const artExists = availableArt.some((art) => art.id === photoId);
 
-      return thumbnailData;
+      if (!artExists) {
+        this.logger.warn(
+          `Art with ID ${photoId} not found in available art list`,
+        );
+        return Buffer.alloc(0);
+      }
+
+      // Primary method: socket-based thumbnail retrieval
+      try {
+        const response = await this.client.request({
+          request: 'get_thumbnail',
+          content_id: photoId,
+          conn_info: {
+            d2d_mode: 'socket',
+            connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
+            id: this.generateUUID(),
+          },
+        });
+
+        this.logger.debug(
+          `Got response for thumbnail request: ${JSON.stringify(response)}`,
+        );
+
+        if (!response || !response.conn_info) {
+          throw new Error('Invalid response: missing conn_info');
+        }
+
+        const connInfo = JSON.parse(response.conn_info);
+        this.logger.debug(`Connection info: ${JSON.stringify(connInfo)}`);
+
+        const thumbnailData = await this.readThumbnailData(connInfo);
+
+        if (thumbnailData.length > 0) {
+          this.logger.debug(
+            `Successfully retrieved thumbnail for ${photoId}, size: ${thumbnailData.length} bytes`,
+          );
+          return thumbnailData;
+        }
+      } catch (socketError) {
+        this.logger.warn(`Socket-based thumbnail retrieval failed for ${photoId}, trying alternative method`);
+      }
+      
+      // Fallback method: try alternative approach
+      const fallbackThumbnail = await this.getThumbnailAlternative(photoId);
+      if (fallbackThumbnail.length > 0) {
+        this.logger.debug(`Successfully retrieved thumbnail using alternative method for ${photoId}`);
+        return fallbackThumbnail;
+      }
+      
+      this.logger.warn(`All thumbnail retrieval methods failed for ${photoId}`);
+      return Buffer.alloc(0);
+
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Failed to get thumbnail for photo ID ${photoId}: ${error.message}`,
+        `Failed to get thumbnail for photo ID ${photoId}: ${errorMessage}`,
       );
+      this.logger.error(`Error details:`, error);
       return Buffer.alloc(0);
     }
   }
@@ -211,6 +257,10 @@ export class FrameEndpoint implements Endpoint {
 
   private async readThumbnailData(connInfo: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
+      this.logger.debug(
+        `Connecting to ${connInfo.ip}:${connInfo.port} for thumbnail data`,
+      );
+
       const socket = tls.connect(
         {
           host: connInfo.ip,
@@ -219,33 +269,65 @@ export class FrameEndpoint implements Endpoint {
         },
         async () => {
           try {
+            this.logger.debug(
+              'TLS connection established, reading thumbnail data',
+            );
+
             // Read header length (4 bytes)
             const headerLenBuffer = await this.readExactly(socket, 4);
             const headerLen = headerLenBuffer.readUInt32BE(0);
+            this.logger.debug(`Header length: ${headerLen}`);
 
             // Read header
             const headerBuffer = await this.readExactly(socket, headerLen);
             const header = JSON.parse(headerBuffer.toString());
+            this.logger.debug(`Header: ${JSON.stringify(header)}`);
 
             // Read thumbnail data
             const thumbnailDataLen = parseInt(header.fileLength);
+            this.logger.debug(`Thumbnail data length: ${thumbnailDataLen}`);
+
+            if (thumbnailDataLen <= 0) {
+              throw new Error(
+                `Invalid thumbnail data length: ${thumbnailDataLen}`,
+              );
+            }
+
             const thumbnailData = await this.readExactly(
               socket,
               thumbnailDataLen,
             );
 
             socket.end();
+            this.logger.debug(
+              `Successfully read ${thumbnailData.length} bytes of thumbnail data`,
+            );
             resolve(thumbnailData);
           } catch (error) {
             socket.end();
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            this.logger.error(`Error reading thumbnail data: ${errorMessage}`);
             reject(error);
           }
         },
       );
 
       socket.on('error', (error) => {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.error(`Socket error: ${errorMessage}`);
         reject(error);
       });
+
+      socket.on('timeout', () => {
+        this.logger.error('Socket timeout');
+        socket.destroy();
+        reject(new Error('Socket timeout'));
+      });
+
+      // Set a timeout for the connection
+      socket.setTimeout(10000); // 10 seconds
     });
   }
 
@@ -304,30 +386,62 @@ export class FrameEndpoint implements Endpoint {
     length: number,
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
+      if (length <= 0) {
+        resolve(Buffer.alloc(0));
+        return;
+      }
+
       const chunks: Buffer[] = [];
       let totalLength = 0;
+      let timeoutId: NodeJS.Timeout;
+
+      const cleanup = () => {
+        socket.off('data', onData);
+        socket.off('error', onError);
+        socket.off('close', onClose);
+        if (timeoutId) clearTimeout(timeoutId);
+      };
 
       const onData = (chunk: Buffer) => {
         chunks.push(chunk);
         totalLength += chunk.length;
 
         if (totalLength >= length) {
-          socket.off('data', onData);
-          socket.off('error', onError);
-
+          cleanup();
           const result = Buffer.concat(chunks);
           resolve(result.subarray(0, length));
         }
       };
 
       const onError = (error: Error) => {
-        socket.off('data', onData);
-        socket.off('error', onError);
+        cleanup();
         reject(error);
+      };
+
+      const onClose = () => {
+        cleanup();
+        if (totalLength < length) {
+          reject(
+            new Error(
+              `Socket closed before reading ${length} bytes (got ${totalLength})`,
+            ),
+          );
+        }
+      };
+
+      const onTimeout = () => {
+        cleanup();
+        reject(
+          new Error(`Timeout reading ${length} bytes (got ${totalLength})`),
+        );
       };
 
       socket.on('data', onData);
       socket.on('error', onError);
+      socket.on('close', onClose);
+
+      // Set a timeout for reading data
+      timeoutId = setTimeout(onTimeout, 5000); // 5 seconds
     });
   }
 
@@ -686,6 +800,60 @@ export class FrameEndpoint implements Endpoint {
     } catch (error) {
       this.logger.error(`Failed to get raw available art: ${error.message}`);
       return [];
+    }
+  }
+
+  /**
+   * Fallback method to get basic art information without thumbnails
+   * Useful when thumbnail retrieval fails
+   */
+  async getArtInfo(photoId: string): Promise<any> {
+    try {
+      const response = await this.client.request({
+        request: 'get_artmode_status',
+      });
+
+      // Get current art and check if it matches the requested ID
+      const currentArt = await this.getCurrentArt();
+      if (currentArt && currentArt.id === photoId) {
+        return {
+          id: photoId,
+          isCurrent: true,
+          ...currentArt,
+        };
+      }
+
+      return { id: photoId, isCurrent: false };
+    } catch (error) {
+      this.logger.error(`Failed to get art info for ${photoId}: ${error.message}`);
+      return { id: photoId, isCurrent: false };
+    }
+  }
+
+  /**
+   * Alternative thumbnail method that might work better for some Frame models
+   */
+  async getThumbnailAlternative(photoId: string): Promise<Buffer> {
+    try {
+      // Try using a different approach - get content directly
+      const response = await this.client.request({
+        request: 'get_content',
+        content_id: photoId,
+        // Request a smaller version/thumbnail
+        version: 'thumb',
+      });
+
+      if (response && response.content) {
+        // If the response contains base64 data
+        if (typeof response.content === 'string') {
+          return Buffer.from(response.content, 'base64');
+        }
+      }
+
+      return Buffer.alloc(0);
+    } catch (error) {
+      this.logger.debug(`Alternative thumbnail method failed for ${photoId}: ${error.message}`);
+      return Buffer.alloc(0);
     }
   }
 }
