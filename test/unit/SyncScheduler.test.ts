@@ -57,7 +57,7 @@ describe('SyncScheduler', () => {
     it('should run initial sync and start timer', async () => {
       // Make sync function fast
       mockSyncFunction.resolves();
-      
+
       await syncScheduler.start();
 
       expect(mockSyncFunction.calledOnce).to.be.true;
@@ -69,14 +69,14 @@ describe('SyncScheduler', () => {
 
     it('should run periodic syncs', async () => {
       mockSyncFunction.resolves();
-      
+
       await syncScheduler.start();
 
       // Advance time by interval
       clock.tick(60000);
-      
+
       // Wait a bit for async operations
-      await new Promise(resolve => process.nextTick(resolve));
+      await new Promise((resolve) => process.nextTick(resolve));
 
       expect(mockSyncFunction.calledTwice).to.be.true; // Initial + one periodic
     });
@@ -91,10 +91,10 @@ describe('SyncScheduler', () => {
 
       // Start the scheduler which will start a sync but not complete it
       const startPromise = syncScheduler.start();
-      
+
       // Wait a tick to let the initial sync start
-      await new Promise(resolve => process.nextTick(resolve));
-      
+      await new Promise((resolve) => process.nextTick(resolve));
+
       expect(syncScheduler.isSyncInProgress()).to.be.true;
 
       // Manually trigger the timer callback by using setInterval again
@@ -106,10 +106,10 @@ describe('SyncScheduler', () => {
         }
         // ... rest of interval logic
       };
-      
+
       // Call the interval callback while sync is in progress
       await intervalCallback();
-      
+
       // Should log that sync is already in progress
       expect(
         mockLogger.info.calledWith(
@@ -128,9 +128,9 @@ describe('SyncScheduler', () => {
 
       try {
         await syncScheduler.start();
-        
+
         clock.tick(60000);
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(mockLogger.error.calledWith('Sync failed:', error)).to.be.true;
         expect(syncScheduler.isRunning()).to.be.true; // Should still be running
@@ -169,7 +169,7 @@ describe('SyncScheduler', () => {
 
     it('should restart scheduler with new interval when running', async () => {
       mockSyncFunction.resolves();
-      
+
       await syncScheduler.start();
       expect(syncScheduler.isRunning()).to.be.true;
 
@@ -193,17 +193,17 @@ describe('SyncScheduler', () => {
 
       // Start the scheduler which will start a sync
       const startPromise = syncScheduler.start();
-      
+
       // Wait a tick to let the sync start
-      await new Promise(resolve => process.nextTick(resolve));
-      
+      await new Promise((resolve) => process.nextTick(resolve));
+
       // Check if sync is in progress during the initial sync
       expect(syncScheduler.isSyncInProgress()).to.be.true;
 
       // Resolve the sync
       resolveSyncPromise!();
       await startPromise;
-      
+
       // Should not be in progress after sync completes
       expect(syncScheduler.isSyncInProgress()).to.be.false;
     });

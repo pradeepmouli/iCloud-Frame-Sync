@@ -1,7 +1,7 @@
 import { expect } from 'chai';
+import type { Logger } from 'pino';
 import sinon from 'sinon';
 import { PhotoSyncService } from '../../src/services/PhotoSyncService';
-import type { Logger } from 'pino';
 
 describe('PhotoSyncService', () => {
   let photoSyncService: PhotoSyncService;
@@ -12,12 +12,12 @@ describe('PhotoSyncService', () => {
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
-    
+
     // Create mock frame client
     mockFrameClient = {
       upload: sandbox.stub(),
     };
-    
+
     // Create mock logger
     mockLogger = {
       info: sandbox.stub(),
@@ -26,7 +26,7 @@ describe('PhotoSyncService', () => {
       trace: sandbox.stub(),
       warn: sandbox.stub(),
     };
-    
+
     // Create mock iCloud service
     mockiCloudService = {
       authenticate: sandbox.stub(),
@@ -39,19 +39,19 @@ describe('PhotoSyncService', () => {
         },
       },
       webservices: {
-        photos: 'mocked-photos-url'
-      }
+        photos: 'mocked-photos-url',
+      },
     };
-    
+
     const config = {
       username: 'test@example.com',
       password: 'testpassword',
       sourceAlbum: 'Test Album',
       dataDirectory: './test-data',
     };
-    
-    photoSyncService = new PhotoSyncService(config, mockFrameClient, mockLogger);
-    
+
+    photoSyncService = new PhotoSyncService(config, mockLogger);
+
     // Replace the iCloud service with our mock
     (photoSyncService as any).iCloudClient = mockiCloudService;
   });
@@ -122,18 +122,21 @@ describe('PhotoSyncService', () => {
           }
           return 'Ready';
         },
-        configurable: true
+        configurable: true,
       });
 
       // Mock process.stdin.once to simulate MFA code input
       const originalOnce = process.stdin.once;
-      process.stdin.once = sinon.stub().callsArgWith(1, Buffer.from('123456\n'));
+      process.stdin.once = sinon
+        .stub()
+        .callsArgWith(1, Buffer.from('123456\n'));
 
       try {
         await photoSyncService.authenticate();
 
         expect(mockiCloudService.authenticate.calledOnce).to.be.true;
-        expect(mockiCloudService.provideMfaCode.calledWith('123456')).to.be.true;
+        expect(mockiCloudService.provideMfaCode.calledWith('123456')).to.be
+          .true;
       } finally {
         // Restore process.stdin.once
         process.stdin.once = originalOnce;
