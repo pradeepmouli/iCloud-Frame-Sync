@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import PhotoDetailModal from '../components/PhotoDetailModal';
 import { api, type Album, type Photo } from '../services/api';
 
 /**
@@ -42,6 +43,10 @@ export default function PhotoGallery() {
     {},
   );
   const [message, setMessage] = useState<string | null>(null);
+
+  // Photo detail modal state
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
     loadAlbums();
@@ -99,6 +104,17 @@ export default function PhotoGallery() {
     } finally {
       setActionLoading({ ...actionLoading, [photoId]: '' });
     }
+  };
+
+  // Modal handlers
+  const openDetailModal = (photo: Photo) => {
+    setSelectedPhoto(photo);
+    setDetailModalOpen(true);
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedPhoto(null);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -297,6 +313,16 @@ export default function PhotoGallery() {
                   <CardActions sx={{ p: 2, pt: 0 }}>
                     <Stack spacing={1} sx={{ width: '100%' }}>
                       <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<InfoIcon />}
+                        onClick={() => openDetailModal(photo)}
+                        fullWidth
+                      >
+                        View Details
+                      </Button>
+
+                      <Button
                         variant="contained"
                         size="small"
                         startIcon={<SendIcon />}
@@ -360,6 +386,16 @@ export default function PhotoGallery() {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Photo Detail Modal */}
+      {selectedPhoto && (
+        <PhotoDetailModal
+          open={detailModalOpen}
+          onClose={closeDetailModal}
+          photo={selectedPhoto}
+          photoType="gallery"
+        />
+      )}
     </Box>
   );
 }

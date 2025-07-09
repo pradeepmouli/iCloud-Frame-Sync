@@ -98,6 +98,10 @@ export class WebServer {
     this.app.get('/api/frame/status', this.getFrameStatus.bind(this));
     this.app.get('/api/frame/art', this.getFrameArt.bind(this));
     this.app.delete('/api/frame/art/:artId', this.deleteFrameArt.bind(this));
+    this.app.get('/api/frame/art/:artId/exif', this.getFrameArtExif.bind(this));
+
+    // Photo EXIF routes
+    this.app.get('/api/photos/:photoId/exif', this.getPhotoExif.bind(this));
 
     // Serve React app for all other routes
     this.app.get('/', (req, res) => {
@@ -636,6 +640,91 @@ export class WebServer {
       }
     } catch (error: any) {
       this.logger.error(`Failed to delete frame art: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  private async getFrameArtExif(req: Request, res: Response): Promise<void> {
+    try {
+      const { artId } = req.params;
+      if (!this.frameEndpoint) {
+        res
+          .status(400)
+          .json({ success: false, error: 'Application not running' });
+        return;
+      }
+
+      // Cast to FrameEndpoint to access Frame-specific methods
+      const frameEndpoint = this.frameEndpoint as FrameEndpoint;
+
+      // Get the art items and find the one with matching ID
+      const photos = await frameEndpoint.photos;
+      const photo = photos.find((p) => p.id === artId);
+
+      if (!photo) {
+        res.status(404).json({
+          success: false,
+          error: `Art with ID ${artId} not found`,
+        });
+        return;
+      }
+
+      // Cast to FramePhoto to access EXIF method
+      const framePhoto = photo as any; // FramePhoto has getExifData method
+      const exifData = await framePhoto.getExifData();
+
+      if (exifData) {
+        res.json({ success: true, exif: exifData });
+      } else {
+        res.json({
+          success: true,
+          exif: null,
+          message: 'No EXIF data available for this art piece',
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to get frame art EXIF: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  private async getPhotoExif(req: Request, res: Response): Promise<void> {
+    try {
+      const { photoId } = req.params;
+      if (!this.iCloudEndpoint) {
+        res
+          .status(400)
+          .json({ success: false, error: 'Application not running' });
+        return;
+      }
+
+      // Get the photos from iCloud and find the one with matching ID
+      const photos = await this.iCloudEndpoint.photos;
+      const photo = photos.find((p) => p.id === photoId);
+
+      if (!photo) {
+        res.status(404).json({
+          success: false,
+          error: `Photo with ID ${photoId} not found`,
+        });
+        return;
+      }
+
+      // Cast to iCloudPhoto to access EXIF method
+      const iCloudPhoto = photo as any; // iCloudPhoto has getExifData method
+      const exifData = await iCloudPhoto.getExifData();
+
+      if (exifData) {
+        res.json({ success: true, exif: exifData });
+      } else {
+        res.json({
+          success: true,
+          exif: null,
+          message: 'No EXIF data available for this photo',
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to get photo EXIF: ${error.message}`);
       res.status(500).json({ success: false, error: error.message });
     }
   }

@@ -204,19 +204,22 @@ export class FrameEndpoint implements Endpoint {
           return thumbnailData;
         }
       } catch (socketError) {
-        this.logger.warn(`Socket-based thumbnail retrieval failed for ${photoId}, trying alternative method`);
+        this.logger.warn(
+          `Socket-based thumbnail retrieval failed for ${photoId}, trying alternative method`,
+        );
       }
-      
+
       // Fallback method: try alternative approach
       const fallbackThumbnail = await this.getThumbnailAlternative(photoId);
       if (fallbackThumbnail.length > 0) {
-        this.logger.debug(`Successfully retrieved thumbnail using alternative method for ${photoId}`);
+        this.logger.debug(
+          `Successfully retrieved thumbnail using alternative method for ${photoId}`,
+        );
         return fallbackThumbnail;
       }
-      
+
       this.logger.warn(`All thumbnail retrieval methods failed for ${photoId}`);
       return Buffer.alloc(0);
-
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -825,7 +828,9 @@ export class FrameEndpoint implements Endpoint {
 
       return { id: photoId, isCurrent: false };
     } catch (error) {
-      this.logger.error(`Failed to get art info for ${photoId}: ${error.message}`);
+      this.logger.error(
+        `Failed to get art info for ${photoId}: ${error.message}`,
+      );
       return { id: photoId, isCurrent: false };
     }
   }
@@ -852,7 +857,9 @@ export class FrameEndpoint implements Endpoint {
 
       return Buffer.alloc(0);
     } catch (error) {
-      this.logger.debug(`Alternative thumbnail method failed for ${photoId}: ${error.message}`);
+      this.logger.debug(
+        `Alternative thumbnail method failed for ${photoId}: ${error.message}`,
+      );
       return Buffer.alloc(0);
     }
   }

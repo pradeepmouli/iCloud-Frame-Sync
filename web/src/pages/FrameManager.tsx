@@ -6,6 +6,7 @@ import {
   PowerSettingsNew as PowerIcon,
   Refresh as RefreshIcon,
   Tv as TvIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -25,6 +26,7 @@ import {
   alpha,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import PhotoDetailModal from '../components/PhotoDetailModal';
 import { api, type FrameArt, type FrameStatus } from '../services/api';
 
 export default function FrameManager() {
@@ -36,6 +38,8 @@ export default function FrameManager() {
     [key: string]: boolean;
   }>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedArt, setSelectedArt] = useState<FrameArt | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
     loadFrameStatus();
@@ -83,6 +87,16 @@ export default function FrameManager() {
   const refreshStatus = () => {
     setLoading(true);
     Promise.all([loadFrameStatus(), loadFrameArt()]);
+  };
+
+  const openDetailModal = (art: FrameArt) => {
+    setSelectedArt(art);
+    setDetailModalOpen(true);
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedArt(null);
   };
 
   return (
@@ -469,19 +483,30 @@ export default function FrameManager() {
                         </CardContent>
 
                         <CardActions sx={{ p: 2, pt: 0 }}>
-                          <Button
-                            variant="outlined"
-                            color="error"
-                            size="small"
-                            startIcon={<DeleteIcon />}
-                            onClick={() => deleteArt(art.id || art.name)}
-                            disabled={actionLoading[art.id || art.name]}
-                            fullWidth
-                          >
-                            {actionLoading[art.id || art.name]
-                              ? 'Deleting...'
-                              : 'Delete from Frame'}
-                          </Button>
+                          <Stack spacing={1} sx={{ width: '100%' }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<VisibilityIcon />}
+                              onClick={() => openDetailModal(art)}
+                              fullWidth
+                            >
+                              View Details
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              startIcon={<DeleteIcon />}
+                              onClick={() => deleteArt(art.id || art.name)}
+                              disabled={actionLoading[art.id || art.name]}
+                              fullWidth
+                            >
+                              {actionLoading[art.id || art.name]
+                                ? 'Deleting...'
+                                : 'Delete from Frame'}
+                            </Button>
+                          </Stack>
                         </CardActions>
                       </Card>
                     </Grid>
@@ -549,6 +574,16 @@ export default function FrameManager() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Photo Detail Modal */}
+      {selectedArt && (
+        <PhotoDetailModal
+          open={detailModalOpen}
+          onClose={closeDetailModal}
+          photo={selectedArt}
+          photoType="frame"
+        />
+      )}
     </Box>
   );
 }

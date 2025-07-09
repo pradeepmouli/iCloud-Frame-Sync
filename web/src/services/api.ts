@@ -315,6 +315,19 @@ class ApiService {
   ): Promise<{ success: boolean; message: string }> {
     return this.request(`/frame/art/${artId}`, { method: 'DELETE' });
   }
+
+  // EXIF data API
+  async getFrameArtExif(
+    artId: string,
+  ): Promise<{ success: boolean; exif: any; message?: string }> {
+    return this.request(`/frame/art/${artId}/exif`);
+  }
+
+  async getPhotoExif(
+    photoId: string,
+  ): Promise<{ success: boolean; exif: any; message?: string }> {
+    return this.request(`/photos/${photoId}/exif`);
+  }
 }
 
 export const api = new ApiService();
