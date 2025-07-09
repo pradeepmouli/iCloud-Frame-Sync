@@ -11,5 +11,8 @@ yarn-error.log
 #coverage
 coverage
 .nyc_output/*
-./data/*
-/Users/pmouli/Documents/GitHub.nosync/iCloud-Frame-Sync/data/.trust-token-cG1vdWxpQG1hYy5jb20=
+
+# Data directory (contains sensitive trust tokens and other user data)
+data/
+data/*
+.trust-token-*
