@@ -11,17 +11,20 @@ This is an iCloud to Samsung Frame TV synchronization service that automatically
 The application has two modes of operation:
 
 ### CLI Mode (Original)
+
 - **Application.ts**: Main application orchestrator that initializes and coordinates all services
 - **PhotoSyncService**: Handles iCloud authentication, photo downloading, and uploading to Frame TV
 - **FrameManager**: Manages Samsung Frame TV connection and art uploads
 - **SyncScheduler**: Manages periodic synchronization with configurable intervals
 
 ### Web UI Mode (New)
+
 - **WebServer**: Express API server that provides REST endpoints for web UI
 - **React Frontend**: Modern web interface with routing for configuration and monitoring
 - **API Integration**: Frontend communicates with backend via REST API
 
 #### Web UI Features
+
 - **Dashboard**: Real-time sync monitoring and control
 - **Configuration**: iCloud and Samsung Frame settings with connection testing
 - **Photo Gallery**: Browse iCloud albums, view photo metadata, manual sync controls
@@ -34,7 +37,7 @@ The application has two modes of operation:
 npm run dev          # Start CLI app with hot reload using tsx
 npm run start:deno   # Run with Deno runtime (alternative)
 
-# Web UI Development  
+# Web UI Development
 npm run dev:web      # Start both web server and React dev server
 npm run dev:server   # Start web server only (port 3001)
 npm run dev:client   # Start React dev server only (port 3000)
@@ -65,25 +68,29 @@ npm run test:coverage # Generate coverage report
 The application uses environment variables for configuration. Key variables include:
 
 ### Core Settings
+
 - `ICLOUD_USERNAME` / `ICLOUD_PASSWORD`: iCloud credentials
 - `ICLOUD_SOURCE_ALBUM`: Album name to sync from (default: "Frame Sync")
 - `SAMSUNG_FRAME_HOST`: Samsung TV IP address
 - `ICLOUD_SYNC_INTERVAL`: Sync frequency in seconds (default: 60)
 - `LOG_LEVEL`: Logging level (default: "info")
 
-### Web UI Settings  
+### Web UI Settings
+
 - `WEB_PORT`: Web server port (default: 3001)
 - `CORS_ORIGIN`: Allowed CORS origin (default: "http://localhost:3000")
 
 ## Key Dependencies
 
 ### Core Dependencies
+
 - **icloudjs**: iCloud Photos API integration
 - **samsung-frame-connect**: Samsung Frame TV API client
 - **pino**: Structured logging
 - **@dotenvx/dotenvx**: Environment variable management
 
 ### Web UI Dependencies
+
 - **express**: Web server framework
 - **cors**: Cross-origin resource sharing
 - **react**: Frontend UI library
@@ -111,3 +118,4 @@ The application uses environment variables for configuration. Key variables incl
 - The application maintains a connection to the Samsung Frame TV throughout operation
 - MFA may be required for iCloud authentication on first run
 - Credentials are cached locally for subsequent runs
+- Please also refer to the instructions in the .github/instructions folder

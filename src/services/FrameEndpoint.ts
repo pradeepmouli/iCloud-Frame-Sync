@@ -104,9 +104,11 @@ export class FrameEndpoint implements Endpoint {
         this._photos = [];
         this.initialized = true;
       } catch (error) {
+        const errorDetails = this.extractErrorDetails(error);
         this.logger.error(
-          `Error initializing Samsung Frame Endpoint: ${error}`,
+          `Error initializing Samsung Frame Endpoint: ${errorDetails.message}`,
         );
+        this.logger.error(`Initialization error details: ${errorDetails.details}`);
       }
     }
   }
@@ -172,41 +174,63 @@ export class FrameEndpoint implements Endpoint {
         return Buffer.alloc(0);
       }
 
-      // Primary method: socket-based thumbnail retrieval
-      try {
-        const response = await this.client.request({
-          request: 'get_thumbnail',
-          content_id: photoId,
-          conn_info: {
-            d2d_mode: 'socket',
-            connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
-            id: this.generateUUID(),
-          },
-        });
+      // Primary method: socket-based thumbnail retrieval with retry
+      const maxRetries = 2;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          this.logger.debug(`Thumbnail attempt ${attempt + 1}/${maxRetries} for ${photoId}`);
+          
+          const response = await this.client.request({
+            request: 'get_thumbnail',
+            content_id: photoId,
+            conn_info: {
+              d2d_mode: 'socket',
+              connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
+              id: this.generateUUID(),
+            },
+          });
 
-        this.logger.debug(
-          `Got response for thumbnail request: ${JSON.stringify(response)}`,
-        );
-
-        if (!response || !response.conn_info) {
-          throw new Error('Invalid response: missing conn_info');
-        }
-
-        const connInfo = JSON.parse(response.conn_info);
-        this.logger.debug(`Connection info: ${JSON.stringify(connInfo)}`);
-
-        const thumbnailData = await this.readThumbnailData(connInfo);
-
-        if (thumbnailData.length > 0) {
           this.logger.debug(
-            `Successfully retrieved thumbnail for ${photoId}, size: ${thumbnailData.length} bytes`,
+            `Got response for thumbnail request: ${JSON.stringify(response)}`,
           );
-          return thumbnailData;
+
+          if (!response || !response.conn_info) {
+            throw new Error('Invalid response: missing conn_info');
+          }
+
+          const connInfo = JSON.parse(response.conn_info);
+          this.logger.debug(`Connection info: ${JSON.stringify(connInfo)}`);
+
+          const thumbnailData = await this.readThumbnailData(connInfo);
+
+          if (thumbnailData.length > 0) {
+            this.logger.debug(
+              `Successfully retrieved thumbnail for ${photoId}, size: ${thumbnailData.length} bytes`,
+            );
+            return thumbnailData;
+          }
+        } catch (socketError) {
+          const errorDetails = this.extractErrorDetails(socketError);
+          
+          // Check if this is an abort error and if we should retry
+          const isAbortError = errorDetails.message.includes('abort');
+          const isLastAttempt = attempt === maxRetries - 1;
+          
+          if (isAbortError && !isLastAttempt) {
+            this.logger.debug(
+              `Thumbnail request aborted for ${photoId}, retrying in ${(attempt + 1) * 1000}ms...`
+            );
+            // Wait before retry with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 1000));
+            continue;
+          }
+          
+          this.logger.warn(
+            `Socket-based thumbnail retrieval failed for ${photoId}: ${errorDetails.message}`,
+          );
+          this.logger.debug(`Error details: ${errorDetails.details}`);
+          break;
         }
-      } catch (socketError) {
-        this.logger.warn(
-          `Socket-based thumbnail retrieval failed for ${photoId}, trying alternative method`,
-        );
       }
 
       // Fallback method: try alternative approach
@@ -221,12 +245,12 @@ export class FrameEndpoint implements Endpoint {
       this.logger.warn(`All thumbnail retrieval methods failed for ${photoId}`);
       return Buffer.alloc(0);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      // Handle Event objects and other error types
+      const errorDetails = this.extractErrorDetails(error);
       this.logger.error(
-        `Failed to get thumbnail for photo ID ${photoId}: ${errorMessage}`,
+        `Failed to get thumbnail for photo ID ${photoId}: ${errorDetails.message}`,
       );
-      this.logger.error(`Error details:`, error);
+      this.logger.error(`Error details: ${errorDetails.details}`);
       return Buffer.alloc(0);
     }
   }
@@ -256,6 +280,62 @@ export class FrameEndpoint implements Endpoint {
 
   private generateUUID(): string {
     return randomBytes(16).toString('hex');
+  }
+
+  /**
+   * Extract error details from various error types including Event objects
+   */
+  private extractErrorDetails(error: any): { message: string; details: string } {
+    try {
+      // Handle Event objects
+      if (error && typeof error === 'object' && error.constructor && error.constructor.name === 'Event') {
+        return {
+          message: `Event error: ${error.type || 'unknown'}`,
+          details: JSON.stringify({
+            type: error.type,
+            target: error.target?.constructor?.name || 'unknown',
+            currentTarget: error.currentTarget?.constructor?.name || 'unknown',
+            timeStamp: error.timeStamp,
+            eventPhase: error.eventPhase,
+            bubbles: error.bubbles,
+            cancelable: error.cancelable,
+            defaultPrevented: error.defaultPrevented,
+          }, null, 2)
+        };
+      }
+
+      // Handle standard Error objects
+      if (error instanceof Error) {
+        return {
+          message: error.message,
+          details: JSON.stringify({
+            name: error.name,
+            message: error.message,
+            stack: error.stack?.split('\n').slice(0, 5).join('\n') // First 5 lines of stack
+          }, null, 2)
+        };
+      }
+
+      // Handle other object types
+      if (error && typeof error === 'object') {
+        return {
+          message: error.message || error.toString() || 'Unknown object error',
+          details: JSON.stringify(error, null, 2)
+        };
+      }
+
+      // Handle primitive types
+      return {
+        message: String(error),
+        details: `Type: ${typeof error}, Value: ${String(error)}`
+      };
+    } catch (extractError) {
+      // Fallback if extraction itself fails
+      return {
+        message: 'Error extraction failed',
+        details: `Original error: ${String(error)}, Extraction error: ${String(extractError)}`
+      };
+    }
   }
 
   private async readThumbnailData(connInfo: any): Promise<Buffer> {
