@@ -1,124 +1,109 @@
-import { config } from '@dotenvx/dotenvx';
-import path from 'node:path/win32';
 import { setTimeout } from 'node:timers/promises';
-import { pino, type Logger } from 'pino';
-import type { SamsungFrameClient } from 'samsung-frame-connect';
+import process from 'node:process';
+import type { Logger } from 'pino';
 
-import { type FrameConfig, type iCloudConfig } from 'types/endpoint.js';
+import { createAppConfigFromEnv, type AppConfig } from './config/environment.js';
+import { createComponentLogger, createLogger } from './observability/logger.js';
 import { PhotoSyncService } from './services/PhotoSyncService.js';
 import { SyncScheduler } from './services/SyncScheduler.js';
 
-config();
-
-export interface AppConfig {
-  iCloud: iCloudConfig;
-  frame: FrameConfig;
-  syncIntervalSeconds: number;
-  logLevel: string;
-}
-
 export class Application {
-  private logger: Logger;
-  //private frameManager: FrameManager;
-  private photoSyncService: PhotoSyncService;
-  private syncScheduler: SyncScheduler;
-  private config: AppConfig;
+	private logger: Logger;
+	//private frameManager: FrameManager;
+	private photoSyncService: PhotoSyncService;
+	private syncScheduler: SyncScheduler;
+	private config: AppConfig;
 
-  constructor(config: AppConfig) {
-    this.config = config;
-    this.logger = pino({
-      transport: { target: 'pino-pretty', options: { colorize: true } },
-      level: config.logLevel,
-    });
+	constructor (
+		config: AppConfig,
+		overrides?: {
+			photoSyncService?: PhotoSyncService,
+			syncScheduler?: SyncScheduler,
+			frameEndpoint?: any,
+			iCloudEndpoint?: any,
+			stateStore?: any,
+			logger?: any,
+		}
+	) {
+		this.config = config;
+		this.logger = overrides?.logger ?? createLogger({ level: config.logLevel });
+		const frameLogger = createComponentLogger(this.logger, 'Samsung Frame Client');
+		const iCloudLogger = createComponentLogger(this.logger, 'iCloud Client');
+		if (overrides?.photoSyncService) {
+			this.photoSyncService = overrides.photoSyncService;
+		} else {
+			this.photoSyncService = new PhotoSyncService(
+				config,
+				this.logger,
+				{
+					frameEndpoint: overrides?.frameEndpoint,
+					iCloudEndpoint: overrides?.iCloudEndpoint,
+					stateStore: overrides?.stateStore,
+				}
+			);
+		}
+		if (overrides?.syncScheduler) {
+			this.syncScheduler = overrides.syncScheduler;
+		} else {
+			this.syncScheduler = new SyncScheduler(
+				{
+					intervalSeconds: config.syncIntervalSeconds,
+					endpoints: [this.photoSyncService.iCloud, this.photoSyncService.frame],
+				},
+				this.logger,
+			);
+		}
+		this.setupSignalHandlers();
+	}
 
-    const frameLogger = this.logger.child({ name: 'Samsung Frame Client' });
-    const iCloudLogger = this.logger.child({ name: 'iCloud Client' });
+	async start(): Promise<void> {
+		try {
+			this.logger.info('Starting iCloud Frame Sync application...');
 
-    //this.frameManager = new FrameManager(config.frame, frameLogger);
-    this.photoSyncService = new PhotoSyncService(config, this.logger);
+			await this.photoSyncService.initialize();
 
-    this.syncScheduler = new SyncScheduler(
-      {
-        intervalSeconds: config.syncIntervalSeconds,
-        endpoints: [this.photoSyncService.iCloud, this.photoSyncService.frame],
-      },
-      this.logger,
-    );
+			// Start sync scheduler
+			await this.syncScheduler.start();
 
-    this.setupSignalHandlers();
-  }
+			this.logger.info('Application started successfully');
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to start application');
+			throw error;
+		}
+	}
 
-  async start(): Promise<void> {
-    try {
-      this.logger.info('Starting iCloud Frame Sync application...');
+	async stop(): Promise<void> {
+		this.logger.info('Stopping application...');
 
-      await this.photoSyncService.initialize();
+		this.syncScheduler.stop();
+		await this.photoSyncService.close();
 
-      // Start sync scheduler
-      await this.syncScheduler.start();
+		this.logger.info('Application stopped');
+	}
 
-      this.logger.info('Application started successfully');
-    } catch (error) {
-      this.logger.error('Failed to start application:', error);
-      throw error;
-    }
-  }
+	private setupSignalHandlers(): void {
+		process.once('SIGINT', async () => {
+			this.logger.info('SIGINT received, closing connection...');
+			setTimeout(5000).then(() => {
+				this.logger.info('Force closing connection...');
+				process.exit(1);
+			});
+			await this.stop();
+			process.exit(0);
+		});
 
-  async stop(): Promise<void> {
-    this.logger.info('Stopping application...');
+		process.on('SIGTERM', async () => {
+			this.logger.info('SIGTERM received, closing connection...');
+			await this.stop();
+			process.exit(0);
+		});
+	}
 
-    this.syncScheduler.stop();
-    await this.photoSyncService.close();
+	getPhotoSyncService(): PhotoSyncService {
+		return this.photoSyncService;
+	}
 
-    this.logger.info('Application stopped');
-  }
-
-  private setupSignalHandlers(): void {
-    process.once('SIGINT', async () => {
-      this.logger.info('SIGINT received, closing connection...');
-      setTimeout(5000).then(() => {
-        this.logger.info('Force closing connection...');
-        process.exit(1);
-      });
-      await this.stop();
-      process.exit(0);
-    });
-
-    process.on('SIGTERM', async () => {
-      this.logger.info('SIGTERM received, closing connection...');
-      await this.stop();
-      process.exit(0);
-    });
-  }
-
-  getPhotoSyncService(): PhotoSyncService {
-    return this.photoSyncService;
-  }
-
-  getSyncScheduler(): SyncScheduler {
-    return this.syncScheduler;
-  }
-}
-
-// Factory function to create app config from environment variables
-export function createAppConfigFromEnv(): AppConfig {
-  return {
-    iCloud: {
-      username: process.env.ICLOUD_USERNAME!,
-      password: process.env.ICLOUD_PASSWORD!,
-      sourceAlbum: process.env.ICLOUD_SOURCE_ALBUM || 'Frame Sync',
-      dataDirectory: path.resolve(process.env.ICLOUD_DATA_DIRECTORY || 'data'),
-      logLevel: process.env.ICLOUD_LOG_LEVEL || process.env.LOG_LEVEL || 'info',
-    },
-    frame: {
-      host: process.env.SAMSUNG_FRAME_HOST!,
-      name: 'SamsungTv',
-      services: ['art-mode', 'device', 'remote-control'],
-      verbosity: Number(process.env.SAMSUNG_FRAME_VERBOSITY || 2),
-      logLevel:
-        process.env.SAMSUNG_FRAME_LOG_LEVEL || process.env.LOG_LEVEL || 'info',
-    },
-    syncIntervalSeconds: Number(process.env.ICLOUD_SYNC_INTERVAL || 60),
-    logLevel: process.env.LOG_LEVEL || 'info',
-  };
+	getSyncScheduler(): SyncScheduler {
+		return this.syncScheduler;
+	}
 }
