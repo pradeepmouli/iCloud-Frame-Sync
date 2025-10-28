@@ -248,9 +248,14 @@ device.
         reusable iCloud endpoint instances, and Frame response timing metrics.
       - Updated `src/web-app.ts` to instantiate/inject
         `ConnectionTesterService` via `createWebServer` bootstrap.
-- [ ] T028 [US4] Extend `src/services/FrameManager.ts` to manage heartbeat
+- [X] T028 [US4] Extend `src/services/FrameManager.ts` to manage heartbeat
       pings, reconnection strategy, and expose connection probe results to
       callers.
+      - Added maxReconnectAttempts and reconnectDelayMs configuration options
+      - Implemented automatic reconnection after consecutive heartbeat failures
+      - Added failure tracking (consecutiveFailures, reconnectAttempts, isReconnecting)
+      - Reconnection respects max attempts and includes delay between attempts
+      - Added comprehensive unit tests for reconnection scenarios
 - [X] T029 [US4] Surface connection testing workflow within configuration UI
       and MFA dialog.
       - Enhanced `web/src/pages/Configuration.tsx` with connection test card,
@@ -259,7 +264,8 @@ device.
         with loading/error state plumbing.
 
 **Checkpoint**: Users can validate connections and resolve authentication
-issues without manual intervention.
+issues without manual intervention. **✅ Phase 6 User Story 4 Complete: All
+tasks completed including reconnection strategy.**
 
 ---
 
@@ -268,9 +274,12 @@ issues without manual intervention.
 **Purpose**: Finalize documentation, performance, and operational readiness
 across stories.
 
-- [ ] T030 [P] Refresh docs (`README.md`,
+- [X] T030 [P] Refresh docs (`README.md`,
       `specs/001-initial-feature-set/quickstart.md`) with CLI usage, dashboard
       workflows, and connection troubleshooting.
+      - Updated README.md with CLI commands, web UI features, troubleshooting section
+      - Enhanced quickstart.md with CLI commands, operational notes, and key enhancements
+      - Documented new features: reconnection strategy, connection testing, retry logic
 - [ ] T031 Harden logging and metrics by adding structured fields to
       `src/observability/logger.ts` and propagating through all service logs.
 - [ ] T032 Validate lint/test workflows by updating CI configuration
