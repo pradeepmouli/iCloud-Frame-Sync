@@ -248,9 +248,14 @@ device.
         reusable iCloud endpoint instances, and Frame response timing metrics.
       - Updated `src/web-app.ts` to instantiate/inject
         `ConnectionTesterService` via `createWebServer` bootstrap.
-- [ ] T028 [US4] Extend `src/services/FrameManager.ts` to manage heartbeat
+- [X] T028 [US4] Extend `src/services/FrameManager.ts` to manage heartbeat
       pings, reconnection strategy, and expose connection probe results to
       callers.
+      - Added maxReconnectAttempts and reconnectDelayMs configuration options
+      - Implemented automatic reconnection after consecutive heartbeat failures
+      - Added failure tracking (consecutiveFailures, reconnectAttempts, isReconnecting)
+      - Reconnection respects max attempts and includes delay between attempts
+      - Added comprehensive unit tests for reconnection scenarios
 - [X] T029 [US4] Surface connection testing workflow within configuration UI
       and MFA dialog.
       - Enhanced `web/src/pages/Configuration.tsx` with connection test card,
@@ -259,7 +264,8 @@ device.
         with loading/error state plumbing.
 
 **Checkpoint**: Users can validate connections and resolve authentication
-issues without manual intervention.
+issues without manual intervention. **✅ Phase 6 User Story 4 Complete: All
+tasks completed including reconnection strategy.**
 
 ---
 
@@ -268,15 +274,36 @@ issues without manual intervention.
 **Purpose**: Finalize documentation, performance, and operational readiness
 across stories.
 
-- [ ] T030 [P] Refresh docs (`README.md`,
+- [X] T030 [P] Refresh docs (`README.md`,
       `specs/001-initial-feature-set/quickstart.md`) with CLI usage, dashboard
       workflows, and connection troubleshooting.
-- [ ] T031 Harden logging and metrics by adding structured fields to
+      - Updated README.md with CLI commands, web UI features, troubleshooting section
+      - Enhanced quickstart.md with CLI commands, operational notes, and key enhancements
+      - Documented new features: reconnection strategy, connection testing, retry logic
+- [X] T031 Harden logging and metrics by adding structured fields to
       `src/observability/logger.ts` and propagating through all service logs.
-- [ ] T032 Validate lint/test workflows by updating CI configuration
+      - Added LogContext interface with standard structured fields (correlationId, component, operation, durationMs, etc.)
+      - Created service-specific log context types (PhotoSyncLogContext, FrameLogContext, iCloudLogContext, SchedulerLogContext)
+      - Added LogLevels constants for consistent severity usage across the application
+      - Implemented logPerformance() for automatic duration tracking
+      - Implemented createOperationLogger() for scoped operation tracking with correlation IDs
+      - Implemented withLogging() wrapper for automatic error logging and performance tracking
+      - All context types provide proper TypeScript typing and discoverability
+- [X] T032 Validate lint/test workflows by updating CI configuration
       (e.g., `.github/workflows/*` or adding new workflow) to run
       `npm run lint`, `npm run test:unit`, `npm run test:integration` on pull
       requests.
+      - Created .github/workflows/ci.yml with comprehensive CI pipeline
+      - Lint job: runs ESLint on all source files
+      - Unit tests job: runs all unit tests
+      - Integration tests job: runs all integration tests
+      - Build job: verifies TypeScript compilation and uploads artifacts
+      - Coverage job: runs on PRs to generate and upload coverage reports
+      - All jobs use Node.js 20 with npm caching for performance
+      - Triggers on push to main/master/develop and all pull requests
+
+**Checkpoint**: Documentation, logging, and CI workflows are production-ready.
+**✅ Phase 7 Polish & Cross-Cutting Concerns Complete: All tasks completed.**
 
 ---
 
