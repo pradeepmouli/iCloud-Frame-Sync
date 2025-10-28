@@ -280,8 +280,15 @@ across stories.
       - Updated README.md with CLI commands, web UI features, troubleshooting section
       - Enhanced quickstart.md with CLI commands, operational notes, and key enhancements
       - Documented new features: reconnection strategy, connection testing, retry logic
-- [ ] T031 Harden logging and metrics by adding structured fields to
+- [X] T031 Harden logging and metrics by adding structured fields to
       `src/observability/logger.ts` and propagating through all service logs.
+      - Added LogContext interface with standard structured fields (correlationId, component, operation, durationMs, etc.)
+      - Created service-specific log context types (PhotoSyncLogContext, FrameLogContext, iCloudLogContext, SchedulerLogContext)
+      - Added LogLevels constants for consistent severity usage across the application
+      - Implemented logPerformance() for automatic duration tracking
+      - Implemented createOperationLogger() for scoped operation tracking with correlation IDs
+      - Implemented withLogging() wrapper for automatic error logging and performance tracking
+      - All context types provide proper TypeScript typing and discoverability
 - [ ] T032 Validate lint/test workflows by updating CI configuration
       (e.g., `.github/workflows/*` or adding new workflow) to run
       `npm run lint`, `npm run test:unit`, `npm run test:integration` on pull
