@@ -30,11 +30,16 @@ export interface FrameManagerOptions<T extends ServicesSchema> {
 	heartbeatIntervalMs?: number;
 	heartbeatTimeoutMs?: number;
 	autoStartHeartbeat?: boolean;
-	clientFactory?: (config: SamsungFrameClientOptions<T>) => SamsungFrameClientType<T>;
+	maxReconnectAttempts?: number;
+	reconnectDelayMs?: number;
+	// eslint-disable-next-line no-unused-vars
+	clientFactory?: (factoryConfig: SamsungFrameClientOptions<T>) => SamsungFrameClientType<T>;
 }
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 5;
+const DEFAULT_RECONNECT_DELAY_MS = 3_000;
 
 export class FrameManager<
 	T extends ServicesSchema = {
@@ -49,9 +54,14 @@ export class FrameManager<
 	private readonly heartbeatIntervalMs: number;
 	private readonly heartbeatTimeoutMs: number;
 	private readonly autoStartHeartbeat: boolean;
-	private heartbeatTimer: NodeJS.Timeout | null = null;
+	private readonly maxReconnectAttempts: number;
+	private readonly reconnectDelayMs: number;
+	private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 	private heartbeatSnapshot: FrameHeartbeatSnapshot | null = null;
 	private initialized = false;
+	private consecutiveFailures = 0;
+	private reconnectAttempts = 0;
+	private isReconnecting = false;
 
 	constructor (
 		config: SamsungFrameClientOptions<T>,
@@ -77,6 +87,14 @@ export class FrameManager<
 			options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS,
 		);
 		this.autoStartHeartbeat = options.autoStartHeartbeat !== false;
+		this.maxReconnectAttempts = Math.max(
+			1,
+			options.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS,
+		);
+		this.reconnectDelayMs = Math.max(
+			1_000,
+			options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
+		);
 	}
 
 	async initialize(): Promise<void> {
@@ -113,6 +131,9 @@ export class FrameManager<
 				responseTimeMs,
 			};
 			this.heartbeatSnapshot = snapshot;
+			// Reset failure counters on success
+			this.consecutiveFailures = 0;
+			this.reconnectAttempts = 0;
 			return {
 				success: true,
 				responseTimeMs,
@@ -132,6 +153,8 @@ export class FrameManager<
 				error: message,
 			};
 			this.heartbeatSnapshot = snapshot;
+			// Track consecutive failures
+			this.consecutiveFailures++;
 			return {
 				success: false,
 				responseTimeMs,
@@ -143,9 +166,13 @@ export class FrameManager<
 	}
 
 	async heartbeat(): Promise<FrameHeartbeatSnapshot> {
-		await this.ensureReachable();
+		const result = await this.ensureReachable();
 		if (!this.heartbeatSnapshot) {
 			throw new Error('Heartbeat snapshot unavailable');
+		}
+		// Trigger reconnection if frame is unreachable
+		if (!result.success && this.consecutiveFailures > 0) {
+			void this.attemptReconnection();
 		}
 		return this.heartbeatSnapshot;
 	}
@@ -183,6 +210,9 @@ export class FrameManager<
 		await this.client.close();
 		this.initialized = false;
 		this.heartbeatSnapshot = null;
+		this.consecutiveFailures = 0;
+		this.reconnectAttempts = 0;
+		this.isReconnecting = false;
 	}
 
 	getClient(): SamsungFrameClientType<T> {
@@ -194,6 +224,8 @@ export class FrameManager<
 		this.heartbeatTimer = setInterval(() => {
 			void this.heartbeat().catch((error) => {
 				this.logger.warn({ error, host: this.host }, 'Heartbeat execution failed');
+				// Attempt reconnection if we have consecutive failures
+				void this.attemptReconnection();
 			});
 		}, this.heartbeatIntervalMs);
 		if (typeof this.heartbeatTimer.unref === 'function') {
@@ -216,5 +248,81 @@ export class FrameManager<
 			return error.trim();
 		}
 		return 'Unable to reach Samsung Frame device.';
+	}
+
+	private async attemptReconnection(): Promise<void> {
+		// Only attempt reconnection if:
+		// 1. We have consecutive failures
+		// 2. We haven't exceeded max attempts
+		// 3. We're not already reconnecting
+		if (
+			this.consecutiveFailures === 0 ||
+			this.reconnectAttempts >= this.maxReconnectAttempts ||
+			this.isReconnecting
+		) {
+			return;
+		}
+
+		this.isReconnecting = true;
+		this.reconnectAttempts++;
+
+		this.logger.info(
+			{
+				host: this.host,
+				attempt: this.reconnectAttempts,
+				maxAttempts: this.maxReconnectAttempts,
+				consecutiveFailures: this.consecutiveFailures,
+			},
+			'Attempting to reconnect to Frame',
+		);
+
+		try {
+			// Wait before attempting reconnection
+			await new Promise((resolve) => setTimeout(resolve, this.reconnectDelayMs));
+
+			// Close existing connection
+			await this.client.close().catch(() => {
+				// Ignore close errors
+			});
+
+			// Attempt to reconnect
+			await this.client.connect();
+
+			// Verify connection with a probe
+			const result = await this.ensureReachable();
+
+			if (result.success) {
+				this.logger.info(
+					{
+						host: this.host,
+						attempt: this.reconnectAttempts,
+					},
+					'Successfully reconnected to Frame',
+				);
+				// Reset counters on successful reconnection
+				this.consecutiveFailures = 0;
+				this.reconnectAttempts = 0;
+			} else {
+				this.logger.warn(
+					{
+						host: this.host,
+						attempt: this.reconnectAttempts,
+						error: result.error,
+					},
+					'Reconnection attempt failed',
+				);
+			}
+		} catch (error: unknown) {
+			this.logger.warn(
+				{
+					error,
+					host: this.host,
+					attempt: this.reconnectAttempts,
+				},
+				'Reconnection attempt threw error',
+			);
+		} finally {
+			this.isReconnecting = false;
+		}
 	}
 }

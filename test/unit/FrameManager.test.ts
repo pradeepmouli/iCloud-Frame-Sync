@@ -236,4 +236,131 @@ describe('FrameManager', () => {
 			expect(client).to.equal(mockSamsungFrameClient);
 		});
 	});
+
+	describe('reconnection strategy', () => {
+		let clock: sinon.SinonFakeTimers;
+
+		beforeEach(() => {
+			clock = sinon.useFakeTimers();
+		});
+
+		afterEach(() => {
+			clock.restore();
+		});
+
+		it('should attempt reconnection after consecutive failures', async () => {
+			const deviceInfo = { model: 'Samsung Frame' };
+			let callCount = 0;
+
+			// First 3 calls fail, then succeed
+			mockSamsungFrameClient.getDeviceInfo.callsFake(() => {
+				callCount++;
+				if (callCount <= 3) {
+					return Promise.reject(new Error('Connection lost'));
+				}
+				return Promise.resolve(deviceInfo);
+			});
+			mockSamsungFrameClient.isOn.resolves(true);
+			mockSamsungFrameClient.inArtMode.resolves(true);
+			mockSamsungFrameClient.getArtModeInfo.resolves({});
+			mockSamsungFrameClient.connect.resolves();
+			mockSamsungFrameClient.close.resolves();
+
+			// Initialize with autoStartHeartbeat
+			const frameManagerWithHeartbeat = new FrameManager(
+				config as any,
+				mockLogger as any,
+				{
+					autoStartHeartbeat: true,
+					heartbeatIntervalMs: 5000,
+					clientFactory: () => mockSamsungFrameClient,
+					maxReconnectAttempts: 5,
+					reconnectDelayMs: 2000,
+				},
+			);
+
+			await frameManagerWithHeartbeat.initialize();
+			const initialConnectCount = mockSamsungFrameClient.connect.callCount;
+
+			// Advance time to trigger first heartbeat failure
+			await clock.tickAsync(5000); // First heartbeat - fails
+			// Advance time for reconnection delay
+			await clock.tickAsync(2000);
+
+			// Should have attempted reconnection
+			expect(mockSamsungFrameClient.connect.callCount).to.be.greaterThan(
+				initialConnectCount,
+			);
+			await frameManagerWithHeartbeat.close();
+		});
+
+		it('should not reconnect if frame is still reachable', async () => {
+			const deviceInfo = { model: 'Samsung Frame' };
+			mockSamsungFrameClient.getDeviceInfo.resolves(deviceInfo);
+			mockSamsungFrameClient.isOn.resolves(true);
+			mockSamsungFrameClient.inArtMode.resolves(true);
+			mockSamsungFrameClient.getArtModeInfo.resolves({});
+			mockSamsungFrameClient.connect.resolves();
+			mockSamsungFrameClient.close.resolves();
+
+			const frameManagerWithHeartbeat = new FrameManager(
+				config as any,
+				mockLogger as any,
+				{
+					autoStartHeartbeat: true,
+					heartbeatIntervalMs: 5000,
+					clientFactory: () => mockSamsungFrameClient,
+				},
+			);
+
+			await frameManagerWithHeartbeat.initialize();
+			const initialConnectCount = mockSamsungFrameClient.connect.callCount;
+
+			// Advance time to trigger multiple heartbeats
+			await clock.tickAsync(5000);
+			await clock.tickAsync(5000);
+			await clock.tickAsync(5000);
+
+			// Should not reconnect since frame is still reachable
+			expect(mockSamsungFrameClient.connect.callCount).to.equal(initialConnectCount);
+			await frameManagerWithHeartbeat.close();
+		});
+
+		it('should stop reconnection attempts after max retries', async () => {
+			mockSamsungFrameClient.getDeviceInfo.rejects(new Error('Persistent failure'));
+			mockSamsungFrameClient.isOn.resolves(false);
+			mockSamsungFrameClient.inArtMode.resolves(false);
+			mockSamsungFrameClient.getArtModeInfo.resolves(undefined);
+			mockSamsungFrameClient.connect.resolves();
+			mockSamsungFrameClient.close.resolves();
+
+			const frameManagerWithHeartbeat = new FrameManager(
+				config as any,
+				mockLogger as any,
+				{
+					autoStartHeartbeat: true,
+					heartbeatIntervalMs: 5000,
+					clientFactory: () => mockSamsungFrameClient,
+					maxReconnectAttempts: 3,
+					reconnectDelayMs: 1000,
+				},
+			);
+
+			await frameManagerWithHeartbeat.initialize();
+			const initialConnectCount = mockSamsungFrameClient.connect.callCount;
+
+			// Trigger multiple heartbeats beyond max retries
+			for (let i = 0; i < 10; i++) {
+				await clock.tickAsync(5000); // Heartbeat interval
+				await clock.tickAsync(1000); // Reconnect delay
+			}
+
+			// Should not exceed max reconnect attempts + initial connect
+			// Initial connect + max 3 reconnects = 4 total
+			expect(mockSamsungFrameClient.connect.callCount).to.be.lessThanOrEqual(
+				initialConnectCount + 3,
+			);
+			await frameManagerWithHeartbeat.close();
+		});
+	});
 });
