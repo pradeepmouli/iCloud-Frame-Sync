@@ -115,6 +115,9 @@ describe('FrameManager', () => {
 		it('captures error details when frame is unreachable', async () => {
 			const error = new Error('timeout');
 			mockSamsungFrameClient.getDeviceInfo.rejects(error);
+			mockSamsungFrameClient.isOn.resolves(false);
+			mockSamsungFrameClient.inArtMode.resolves(false);
+			mockSamsungFrameClient.getArtModeInfo.resolves(undefined);
 
 			const result = await frameManager.ensureReachable();
 
