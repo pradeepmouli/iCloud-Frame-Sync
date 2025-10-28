@@ -10,6 +10,11 @@ describe('Integration: Photo Sync Workflow', () => {
 	let mockLogger: sinon.SinonStubbedInstance<Logger>;
 	let mockFrameClient: any;
 
+	const markServiceReady = (service: PhotoSyncService): void => {
+		(service as any).ready = true;
+		(service as any).initializationError = null;
+	};
+
 	beforeEach(() => {
 		mockLogger = {
 			info: sinon.stub(),
@@ -17,7 +22,7 @@ describe('Integration: Photo Sync Workflow', () => {
 			debug: sinon.stub(),
 			warn: sinon.stub(),
 			child: sinon.stub().returnsThis(),
-		};
+		} as unknown as sinon.SinonStubbedInstance<Logger>;
 		// Create a mock Samsung Frame client
 		mockFrameClient = {
 			upload: sinon.stub(),
@@ -56,6 +61,7 @@ describe('Integration: Photo Sync Workflow', () => {
 				stateStore: undefined,
 			}
 		);
+		markServiceReady(photoSyncService);
 	});
 
 	it('should handle complete photo sync workflow with mocked services', async () => {

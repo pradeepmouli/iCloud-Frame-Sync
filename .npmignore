@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+.specify/
+.specify/**
+specs/
+test/
+.vscode/
+.env
+.env.*
+*.log
+Dockerfile
+Dockerfile.*

@@ -1,2 +1,14 @@
-node_modules
-dist
+node_modules/
+dist/
+build/
+coverage/
+.git/
+.gitignore
+Dockerfile*
+docker-compose*.yml
+*.log
+.env
+.env.*
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

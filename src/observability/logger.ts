@@ -8,7 +8,7 @@ import { pino, type Logger, type LoggerOptions } from 'pino';
 const DEFAULT_LOGGER_OPTIONS: LoggerOptions = {
 	level: 'info',
 	transport:
-		process.env['NODE_ENV'] !== 'production'
+		process.env['NODE_ENV'] !== 'production' && process.env['NODE_ENV'] !== 'test'
 			? {
 				target: 'pino-pretty',
 				options: {
@@ -33,10 +33,29 @@ const DEFAULT_LOGGER_OPTIONS: LoggerOptions = {
  * ```
  */
 export function createLogger(options?: LoggerOptions): Logger {
-	return pino({
+	const isTestEnv = process.env['NODE_ENV'] === 'test';
+	const exitSnapshot = isTestEnv ? new Set(process.listeners('exit')) : undefined;
+	const beforeExitSnapshot = isTestEnv ? new Set(process.listeners('beforeExit')) : undefined;
+
+	const logger = pino({
 		...DEFAULT_LOGGER_OPTIONS,
 		...options,
 	});
+
+	if (isTestEnv) {
+		for (const listener of process.listeners('exit')) {
+			if (!exitSnapshot?.has(listener)) {
+				process.removeListener('exit', listener);
+			}
+		}
+		for (const listener of process.listeners('beforeExit')) {
+			if (!beforeExitSnapshot?.has(listener)) {
+				process.removeListener('beforeExit', listener);
+			}
+		}
+	}
+
+	return logger;
 }
 
 /**

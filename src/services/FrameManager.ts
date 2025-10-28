@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 import {
   SamsungFrameClient,
@@ -6,6 +7,35 @@ import {
   type ServicesSchema,
 } from 'samsung-frame-connect';
 
+export interface FrameConnectionProbeResult {
+  success: boolean;
+  responseTimeMs: number;
+  isOn: boolean;
+  inArtMode: boolean;
+  deviceInfo?: Record<string, unknown>;
+  artModeInfo?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface FrameHeartbeatSnapshot {
+  lastCheckedAt: number;
+  isReachable: boolean;
+  isOn?: boolean;
+  inArtMode?: boolean;
+  responseTimeMs?: number;
+  error?: string;
+}
+
+export interface FrameManagerOptions<T extends ServicesSchema> {
+  heartbeatIntervalMs?: number;
+  heartbeatTimeoutMs?: number;
+  autoStartHeartbeat?: boolean;
+  clientFactory?: (config: SamsungFrameClientOptions<T>) => SamsungFrameClientType<T>;
+}
+
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+
 export class FrameManager<
   T extends ServicesSchema = {
     'art-mode': true;
@@ -13,42 +43,115 @@ export class FrameManager<
     'remote-control': true;
   },
 > {
-  private client: SamsungFrameClientType<T>;
-  private logger: Logger;
+  private readonly client: SamsungFrameClientType<T>;
+  private readonly logger: Logger;
+  private readonly host: string;
+  private readonly heartbeatIntervalMs: number;
+  private readonly heartbeatTimeoutMs: number;
+  private readonly autoStartHeartbeat: boolean;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private heartbeatSnapshot: FrameHeartbeatSnapshot | null = null;
+  private initialized = false;
 
-  constructor(config: SamsungFrameClientOptions<T>, logger: Logger) {
+  constructor(
+    config: SamsungFrameClientOptions<T>,
+    logger: Logger,
+    options: FrameManagerOptions<T> = {},
+  ) {
     this.logger = logger;
-    this.client = new SamsungFrameClient({
-      host: config.host,
-      name: config.name || 'SamsungTv',
-      services: config.services,
-      verbosity: config.verbosity || 0,
-    }) as SamsungFrameClientType<T>;
+    const clientFactory = options.clientFactory ?? ((factoryConfig: SamsungFrameClientOptions<T>) =>
+      new SamsungFrameClient({
+        host: factoryConfig.host,
+        name: factoryConfig.name ?? 'SamsungTv',
+        services: factoryConfig.services,
+        verbosity: factoryConfig.verbosity ?? 0,
+      }) as SamsungFrameClientType<T>);
+    this.client = clientFactory(config);
+    this.host = config.host;
+    this.heartbeatIntervalMs = Math.max(
+      1_000,
+      options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS,
+    );
+    this.heartbeatTimeoutMs = Math.max(
+      1_000,
+      options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS,
+    );
+    this.autoStartHeartbeat = options.autoStartHeartbeat !== false;
   }
 
   async initialize(): Promise<void> {
-    const deviceInfo = await this.client.getDeviceInfo();
-    this.logger.info(`Device Info: ${JSON.stringify(deviceInfo, null, 2)}`);
-
-    const isOn = await this.client.isOn();
-    this.logger.info(`Is On: ${isOn}`);
-
-    if (!isOn) {
-      this.logger.info('Device is off, turning it on...');
-      await this.client.togglePower();
-      this.logger.info('Device is on');
+    if (this.initialized) {
+      return;
     }
 
+    this.logger.info({ host: this.host }, 'Initializing frame manager');
+    await this.ensureReachable();
     await this.client.connect();
+    this.initialized = true;
+    if (this.autoStartHeartbeat) {
+      this.startHeartbeat();
+    }
+  }
 
-    const inArtMode = await this.client.inArtMode();
-    this.logger.info(`In Art Mode: ${inArtMode}`);
+  async ensureReachable(): Promise<FrameConnectionProbeResult> {
+    const startedAt = performance.now();
+    try {
+      const [deviceInfo, isOn, inArtMode, artModeInfo] = await Promise.all([
+        this.client.getDeviceInfo(),
+        this.client.isOn().catch(() => false),
+        this.client.inArtMode().catch(() => false),
+        this.client.getArtModeInfo().catch(() => undefined as
+          | Record<string, unknown>
+          | undefined),
+      ]);
+      const responseTimeMs = Math.round(performance.now() - startedAt);
+      const snapshot: FrameHeartbeatSnapshot = {
+        lastCheckedAt: Date.now(),
+        isReachable: true,
+        isOn,
+        inArtMode,
+        responseTimeMs,
+      };
+      this.heartbeatSnapshot = snapshot;
+      return {
+        success: true,
+        responseTimeMs,
+        isOn,
+        inArtMode,
+        deviceInfo,
+        artModeInfo,
+      };
+    } catch (error: unknown) {
+      const responseTimeMs = Math.round(performance.now() - startedAt);
+      const message = this.normalizeError(error);
+      this.logger.warn({ error, host: this.host }, 'Frame reachability probe failed');
+      const snapshot: FrameHeartbeatSnapshot = {
+        lastCheckedAt: Date.now(),
+        isReachable: false,
+        responseTimeMs,
+        error: message,
+      };
+      this.heartbeatSnapshot = snapshot;
+      return {
+        success: false,
+        responseTimeMs,
+        isOn: false,
+        inArtMode: false,
+        error: message,
+      };
+    }
+  }
 
-    const artModeInfo = await this.client.getArtModeInfo();
-    this.logger.info(`Art Mode Info: ${JSON.stringify(artModeInfo, null, 2)}`);
+  async heartbeat(): Promise<FrameHeartbeatSnapshot> {
+    await this.ensureReachable();
+    if (!this.heartbeatSnapshot) {
+      throw new Error('Heartbeat snapshot unavailable');
+    }
+    return this.heartbeatSnapshot;
+  }
 
-    await this.client.getAvailableArt();
-    this.logger.info(`Available Art: ${JSON.stringify(artModeInfo, null, 2)}`);
+  getHeartbeatSnapshot(): FrameHeartbeatSnapshot | null {
+    return this.heartbeatSnapshot;
   }
 
   async isOn(): Promise<boolean> {
@@ -63,11 +166,11 @@ export class FrameManager<
     return await this.client.inArtMode();
   }
 
-  async getDeviceInfo(): Promise<any> {
+  async getDeviceInfo(): Promise<Record<string, unknown>> {
     return await this.client.getDeviceInfo();
   }
 
-  async getArtModeInfo(): Promise<any> {
+  async getArtModeInfo(): Promise<Record<string, unknown>> {
     return await this.client.getArtModeInfo();
   }
 
@@ -76,10 +179,42 @@ export class FrameManager<
   }
 
   async close(): Promise<void> {
+    this.stopHeartbeat();
     await this.client.close();
+    this.initialized = false;
+    this.heartbeatSnapshot = null;
   }
 
   getClient(): SamsungFrameClientType<T> {
     return this.client;
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      void this.heartbeat().catch((error) => {
+        this.logger.warn({ error, host: this.host }, 'Heartbeat execution failed');
+      });
+    }, this.heartbeatIntervalMs);
+    if (typeof this.heartbeatTimer.unref === 'function') {
+      this.heartbeatTimer.unref();
+    }
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private normalizeError(error: unknown): string {
+    if (error instanceof Error && typeof error.message === 'string') {
+      return error.message;
+    }
+    if (typeof error === 'string' && error.trim().length > 0) {
+      return error.trim();
+    }
+    return 'Unable to reach Samsung Frame device.';
   }
 }

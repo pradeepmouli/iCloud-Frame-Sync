@@ -1,15 +1,28 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import type { Logger } from 'pino';
+
+import type { FrameConfig, iCloudConfig } from '../types/endpoint.js';
 import type {
-	Endpoint,
-	FrameConfig,
-	iCloudConfig,
-	Photo,
-} from '../types/endpoint.js';
+	AlbumSummary,
+	ManualSyncRequest,
+	PhotoListQuery,
+	PhotoPage,
+	PhotoSummary,
+	SettingsConfigSnapshot,
+	SettingsUpdateRequest,
+	SyncAccepted,
+} from './dashboardTypes.js';
 import { FrameEndpoint } from './FrameEndpoint.js';
 import { iCloudEndpoint } from './iCloudEndpoint.js';
-import { SyncStateStore, type PhotoState } from './SyncStateStore.js';
+import { SyncStateStore } from './SyncStateStore.js';
+
+export class SetupRequiredError extends Error {
+	constructor (message = 'Photo sync service is not fully configured yet.') {
+		super(message);
+		this.name = 'SetupRequiredError';
+	}
+}
 
 export interface PhotoSyncServiceConfig {
 	frame: FrameConfig;
@@ -22,133 +35,290 @@ export interface PhotoSyncServiceOptions {
 	stateStore?: SyncStateStore;
 }
 
+interface SyncSummary {
+	processed: number;
+	succeeded: number;
+	failed: number;
+	skipped: number;
+	photoIds: string[];
+}
+
 export class PhotoSyncService {
-	private logger: Logger;
 	private frameEndpoint: FrameEndpoint;
 	private iCloudEndpoint: iCloudEndpoint;
-	private stateStore: SyncStateStore;
+	private readonly stateStore: SyncStateStore;
 	private sourceAlbum: string;
-	private handledPhotos = new Set<string>();
-	private maxRetries: number;
-	private baseDelayMs: number = 500;
+	private readonly maxRetries: number;
+	private readonly baseDelayMs = 500;
+	private readonly webPort: number;
+	private currentSettings: SettingsConfigSnapshot;
+	private readonly initialFrameHost: string;
+	private readonly initialSyncIntervalSeconds?: number;
+	private stateStoreInitialized = false;
+	private ready = false;
+	private initializationError: Error | null = null;
+	private readonly useFrameOverride: boolean;
+	private readonly useICloudOverride: boolean;
+	private frameEndpointHost: string;
+	private iCloudEndpointUsername: string;
+	private iCloudEndpointPassword: string;
 
-	public get frame() {
+	constructor (
+		private readonly config: PhotoSyncServiceConfig,
+		private readonly logger: Logger,
+		options?: PhotoSyncServiceOptions,
+	) {
+		this.sourceAlbum = config?.iCloud?.sourceAlbum ?? 'Default Album';
+		this.maxRetries = (config as unknown as { maxRetries?: number; })?.maxRetries ?? 3;
+		this.initialFrameHost = config?.frame?.host ?? 'unknown-frame';
+		this.initialSyncIntervalSeconds = (config as unknown as { syncIntervalSeconds?: number; })?.syncIntervalSeconds;
+		this.webPort = Number.parseInt(process.env.WEB_PORT ?? '3001', 10);
+
+		const frameConfig: FrameConfig = {
+			...config.frame,
+			services: (config.frame?.services || []).map(String),
+		};
+
+		this.useFrameOverride = Boolean(options?.frameEndpoint);
+		this.useICloudOverride = Boolean(options?.iCloudEndpoint);
+
+		this.frameEndpoint =
+			options?.frameEndpoint ??
+			new FrameEndpoint(frameConfig, this.logger.child({ name: 'Frame' }));
+		this.frameEndpointHost = frameConfig.host;
+
+		const iCloudConfig: iCloudConfig = {
+			...config.iCloud,
+			dataDirectory:
+				config.iCloud?.dataDirectory ?? path.resolve('data'),
+		};
+		this.iCloudEndpoint =
+			options?.iCloudEndpoint ??
+			new iCloudEndpoint(
+				iCloudConfig,
+				this.logger.child({ name: 'iCloud' }),
+			);
+		this.iCloudEndpointUsername = iCloudConfig.username;
+		this.iCloudEndpointPassword = iCloudConfig.password;
+
+		this.stateStore =
+			options?.stateStore ??
+			new SyncStateStore(this.logger.child({ name: 'StateStore' }));
+
+		this.refreshCurrentSettings();
+	}
+
+	public get frame(): FrameEndpoint {
 		return this.frameEndpoint;
 	}
 
-	public get iCloud() {
+	public get iCloud(): iCloudEndpoint {
 		return this.iCloudEndpoint;
 	}
 
-	constructor (
-		config: PhotoSyncServiceConfig,
-		logger: Logger,
-		options?: PhotoSyncServiceOptions,
-	) {
-		this.logger = logger;
-		// Defensive: allow missing config.iCloud or sourceAlbum
-		this.sourceAlbum = config?.iCloud?.sourceAlbum ?? 'Default Album';
-		this.maxRetries = (config as any)?.maxRetries ?? 3;
+	public isReady(): boolean {
+		return this.ready;
+	}
 
-		// Use provided instances or create new ones
-		const frameConfig = {
-			...config?.frame,
-			services: (config?.frame?.services || []).map(String),
+	public getLastError(): string | null {
+		return this.initializationError?.message ?? null;
+	}
+
+	private getMissingConfigFields(): string[] {
+		const missing: string[] = [];
+		if (!this.config?.iCloud?.username || this.config.iCloud.username.trim().length === 0) {
+			missing.push('ICLOUD_USERNAME');
+		}
+		if (!this.config?.iCloud?.password || this.config.iCloud.password.trim().length === 0) {
+			missing.push('ICLOUD_PASSWORD');
+		}
+		if (!this.config?.frame?.host || this.config.frame.host.trim().length === 0) {
+			missing.push('SAMSUNG_FRAME_HOST');
+		}
+		return missing;
+	}
+
+	private buildSettingsSnapshot(): SettingsConfigSnapshot {
+		const missing = this.getMissingConfigFields();
+		return {
+			syncAlbumName: this.sourceAlbum,
+			frameHost: this.config.frame?.host ?? '',
+			syncIntervalSeconds: this.currentSettings?.syncIntervalSeconds ?? this.initialSyncIntervalSeconds,
+			logLevel: this.currentSettings?.logLevel,
+			corsOrigin: this.currentSettings?.corsOrigin,
+			webPort: this.webPort,
+			iCloudUsername: this.config.iCloud?.username,
+			hasICloudPassword: Boolean(this.config.iCloud?.password),
+			isConfigured: this.ready && missing.length === 0,
+			missingFields: missing,
+			lastError: this.initializationError?.message ?? null,
 		};
-		this.frameEndpoint = options?.frameEndpoint ?? new FrameEndpoint(
-			frameConfig,
-			this.logger.child({ name: 'Frame' }),
-		);
-		this.iCloudEndpoint = options?.iCloudEndpoint ?? new iCloudEndpoint(
-			{
-				...config?.iCloud,
-				dataDirectory: config?.iCloud?.dataDirectory || path.resolve('data'),
-			},
-			this.logger.child({ name: 'iCloud' }),
-		);
-		// Initialize state store
-		this.stateStore = options?.stateStore ?? new SyncStateStore(
-			this.logger.child({ name: 'StateStore' })
-		);
+	}
+
+	private refreshCurrentSettings(): void {
+		this.currentSettings = this.buildSettingsSnapshot();
+	}
+
+	private rebuildEndpointsIfNeeded(): void {
+		if (!this.useFrameOverride) {
+			const desiredHost = this.config.frame?.host ?? '';
+			if (desiredHost !== this.frameEndpointHost) {
+				const frameConfig: FrameConfig = {
+					...this.config.frame,
+					services: (this.config.frame?.services || []).map(String),
+				};
+				this.frameEndpoint = new FrameEndpoint(
+					frameConfig,
+					this.logger.child({ name: 'Frame' }),
+				);
+				this.frameEndpointHost = frameConfig.host;
+			}
+		}
+
+		if (!this.useICloudOverride) {
+			const desiredUsername = this.config.iCloud?.username ?? '';
+			const desiredPassword = this.config.iCloud?.password ?? '';
+			if (desiredUsername !== this.iCloudEndpointUsername || desiredPassword !== this.iCloudEndpointPassword) {
+				const iCloudConfig: iCloudConfig = {
+					...this.config.iCloud,
+					dataDirectory:
+						this.config.iCloud?.dataDirectory ?? path.resolve('data'),
+				};
+				this.iCloudEndpoint = new iCloudEndpoint(
+					iCloudConfig,
+					this.logger.child({ name: 'iCloud' }),
+				);
+				this.iCloudEndpointUsername = iCloudConfig.username;
+				this.iCloudEndpointPassword = iCloudConfig.password;
+			}
+		}
+	}
+
+	getCurrentSettings(): SettingsConfigSnapshot {
+		this.refreshCurrentSettings();
+		return this.currentSettings;
 	}
 
 	async initialize(): Promise<void> {
 		this.logger.info('Initializing Photo Sync Service...');
-		await this.stateStore.initialize();
-		await this.iCloudEndpoint.initialize();
-		await this.frameEndpoint.initialize();
+		if (!this.stateStoreInitialized) {
+			await this.stateStore.initialize();
+			this.stateStoreInitialized = true;
+		}
+
+		this.rebuildEndpointsIfNeeded();
+
+		const missing = this.getMissingConfigFields();
+		if (missing.length > 0) {
+			this.ready = false;
+			this.initializationError = new Error(`Missing configuration: ${missing.join(', ')}`);
+			this.logger.warn(
+				{ missing },
+				'Configuration incomplete. Deferring endpoint initialization until setup is complete.',
+			);
+			this.refreshCurrentSettings();
+			return;
+		}
+
+		try {
+			await this.iCloudEndpoint.initialize();
+		} catch (error) {
+			this.ready = false;
+			this.initializationError = error instanceof Error ? error : new Error(String(error));
+			this.logger.error(
+				{ error: this.initializationError?.message },
+				'Failed to initialize Photo Sync Service. Continuing in setup mode.',
+			);
+			this.refreshCurrentSettings();
+			return;
+		}
+
+		try {
+			await this.frameEndpoint.initialize();
+		} catch (error) {
+			this.ready = false;
+			this.initializationError = error instanceof Error ? error : new Error(String(error));
+			this.logger.error(
+				{ error: this.initializationError?.message },
+				'Failed to initialize Photo Sync Service. Continuing in setup mode.',
+			);
+			this.refreshCurrentSettings();
+			return;
+		}
+
+		this.ready = true;
+		this.initializationError = null;
 		this.logger.info('Photo Sync Service initialized');
+		this.refreshCurrentSettings();
 	}
 
 	async close(): Promise<void> {
 		this.logger.info('Closing Photo Sync Service...');
-		await this.frameEndpoint?.close();
-		await this.iCloudEndpoint?.close();
+		await this.frameEndpoint.close();
+		await this.iCloudEndpoint.close();
 		this.logger.info('Photo Sync Service closed');
 	}
 
-	/**
-	 * Syncs photos from iCloud to Samsung Frame with incremental sync and state tracking.
-	 * Uses lastSyncTimestamp to fetch only new/modified photos.
-	 */
-	async syncPhotos(): Promise<void> {
-		this.logger.info(
-			{ albumId: this.sourceAlbum },
-			'Starting incremental photo sync...'
-		);
+	async syncPhotos(): Promise<SyncSummary> {
+		if (!this.ready) {
+			throw new SetupRequiredError(
+				this.initializationError?.message ?? 'Sync service must be configured before running.',
+			);
+		}
+
+		this.logger.info({ albumId: this.sourceAlbum }, 'Starting incremental photo sync...');
 
 		const startTime = Date.now();
 		let processed = 0;
 		let succeeded = 0;
 		let failed = 0;
 		let skipped = 0;
+		const processedPhotoIds: string[] = [];
 
 		try {
-			// Get last sync timestamp for incremental fetch
-			const lastSyncTimestamp = await this.stateStore.getAlbumLastSyncTimestamp(
-				this.sourceAlbum
-			);
+			const lastSyncTimestamp = await this.stateStore.getAlbumLastSyncTimestamp(this.sourceAlbum);
 			this.logger.debug(
 				{ albumId: this.sourceAlbum, lastSyncTimestamp },
-				'Fetching photos for incremental sync'
+				'Fetching photos for incremental sync',
 			);
-			// Fetch photos from iCloud (only new/modified if lastSyncTimestamp exists)
+
 			const photos = await this.iCloudEndpoint.listPhotos(
 				this.sourceAlbum,
-				lastSyncTimestamp ?? undefined
+				lastSyncTimestamp ?? undefined,
 			);
+
 			this.logger.info(
 				{ photoCount: photos.length, albumId: this.sourceAlbum },
-				'Fetched photos from iCloud'
+				'Fetched photos from iCloud',
 			);
-			// Process each photo
+
 			for (const photo of photos) {
 				processed++;
-				// Check state for retryCount and status
+
 				const existingState = await this.stateStore.getPhotoState(photo.id);
 				const currentRetry = existingState?.retryCount ?? 0;
+
 				if (existingState?.status === 'uploaded') {
-					this.logger.debug(
-						{ photoId: photo.id, filename: photo.filename },
-						'Photo already uploaded, skipping'
-					);
+					this.logger.debug({ photoId: photo.id, filename: photo.filename }, 'Photo already uploaded, skipping');
 					skipped++;
 					continue;
 				}
-				// If retryCount >= maxRetries, skip before any upload attempt
+
 				if (currentRetry >= this.maxRetries) {
 					this.logger.warn(
 						{ photoId: photo.id, retryCount: currentRetry, filename: photo.filename },
-						`Photo exceeded max retries (${this.maxRetries}), skipping.`
+						`Photo exceeded max retries (${this.maxRetries}), skipping.`,
 					);
 					skipped++;
 					continue;
 				}
-				let lastError: string | undefined;
+
+				processedPhotoIds.push(photo.id);
 				let success = false;
+				let lastError: string | undefined;
+
 				for (let attempt = currentRetry; attempt < this.maxRetries; attempt++) {
 					try {
-						// Update state to pending
 						await this.stateStore.updatePhotoState(photo.id, {
 							status: 'pending',
 							albumId: this.sourceAlbum,
@@ -156,37 +326,37 @@ export class PhotoSyncService {
 							lastModifiedAt: photo.lastModified.toISOString(),
 							retryCount: attempt,
 						});
-						// Download photo data
+
 						this.logger.debug({ photoId: photo.id, attempt }, 'Downloading photo');
 						const photoData = await photo.download();
-						// Calculate checksum
-						const checksum = crypto
-							.createHash('sha256')
-							.update(photoData)
-							.digest('hex');
-						// Update state with checksum
+
+						const checksum = crypto.createHash('sha256').update(photoData).digest('hex');
+
 						await this.stateStore.updatePhotoState(photo.id, {
 							checksum,
 							sizeBytes: photoData.length,
 						});
-						// Upload to Frame
+
 						this.logger.info(
 							{ photoId: photo.id, filename: photo.filename, size: photoData.length, attempt },
-							'Uploading photo to Frame'
+							'Uploading photo to Frame',
 						);
+
 						const frameArtId = await this.frameEndpoint.upload(photo);
-						// Update state to uploaded
+
+						const nowIso = new Date().toISOString();
 						await this.stateStore.updatePhotoState(photo.id, {
 							status: 'uploaded',
-							uploadedAt: new Date().toISOString(),
-							lastSyncedAt: new Date().toISOString(),
+							uploadedAt: nowIso,
+							lastSyncedAt: nowIso,
 							retryCount: attempt,
-							errorMessage: undefined,
+							errorMessage: null,
 						});
+
 						succeeded++;
 						this.logger.info(
 							{ photoId: photo.id, frameArtId, filename: photo.filename, attempt },
-							'Photo uploaded successfully'
+							'Photo uploaded successfully',
 						);
 						success = true;
 						break;
@@ -194,57 +364,186 @@ export class PhotoSyncService {
 						lastError = error instanceof Error ? error.message : String(error);
 						this.logger.error(
 							{ photoId: photo.id, filename: photo.filename, error: lastError, attempt },
-							'Failed to sync photo (will retry if attempts remain)'
+							'Failed to sync photo (will retry if attempts remain)',
 						);
+
 						await this.stateStore.updatePhotoState(photo.id, {
 							status: 'failed',
 							errorMessage: lastError,
 							retryCount: attempt + 1,
 						});
+
 						failed++;
-						// Exponential backoff
 						const delayMs = this.baseDelayMs * Math.pow(2, attempt);
-						await new Promise(res => setTimeout(res, delayMs));
+						await new Promise((resolve) => setTimeout(resolve, delayMs));
 					}
 				}
+
 				if (!success) {
 					this.logger.warn(
 						{ photoId: photo.id, filename: photo.filename, lastError, maxRetries: this.maxRetries },
-						'Photo failed all retry attempts, skipping.'
+						'Photo failed all retry attempts, skipping.',
 					);
 				}
 			}
-			// Update album state with sync timestamp
+
 			await this.stateStore.updateAlbumState(this.sourceAlbum, {
 				lastSyncedAt: new Date().toISOString(),
 				photoCount: photos.length,
+				name: this.sourceAlbum,
+				id: this.sourceAlbum,
 			});
-			const duration = Date.now() - startTime;
+
+			const durationMs = Date.now() - startTime;
 			this.logger.info(
-				{
-					albumId: this.sourceAlbum,
-					processed,
-					succeeded,
-					failed,
-					skipped,
-					durationMs: duration,
-				},
-				'Photo sync completed'
+				{ albumId: this.sourceAlbum, processed, succeeded, failed, skipped, durationMs },
+				'Photo sync completed',
 			);
+
+			return { processed, succeeded, failed, skipped, photoIds: processedPhotoIds };
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			this.logger.error(
-				{ albumId: this.sourceAlbum, error: errorMessage },
-				'Photo sync failed'
-			);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.logger.error({ albumId: this.sourceAlbum, error: errorMessage }, 'Photo sync failed');
 			throw error;
 		}
 	}
 
-	// Optionally, add handledPhotos tracking if needed for deduplication, etc.
+	getStateStore(): SyncStateStore {
+		return this.stateStore;
+	}
+
+	async listAlbums(): Promise<AlbumSummary[]> {
+		const state = await this.stateStore.read();
+		return Object.values(state.albums).map((album) => ({
+			id: album.id,
+			name: album.name,
+			photoCount: album.photoCount,
+			lastSyncedAt: album.lastSyncedAt,
+		}));
+	}
+
+	async listPhotos(query: PhotoListQuery): Promise<PhotoPage> {
+		const photos = await this.stateStore.getPhotosForAlbum(query.albumId);
+		const sorted = [...photos].sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt));
+		const total = sorted.length;
+		const startIndex = Math.max(0, (query.page - 1) * query.pageSize);
+		const paged = sorted.slice(startIndex, startIndex + query.pageSize);
+
+		const items: PhotoSummary[] = paged.map((photo) => ({
+			id: photo.id,
+			albumId: photo.albumId,
+			takenAt: photo.takenAt,
+			sizeBytes: photo.sizeBytes,
+			format: photo.format,
+			status: photo.status,
+		}));
+
+		return {
+			items,
+			pagination: {
+				page: query.page,
+				pageSize: query.pageSize,
+				total,
+			},
+		};
+	}
+
+	async queueManualSync(request: ManualSyncRequest): Promise<SyncAccepted> {
+		if (!this.ready) {
+			throw new SetupRequiredError(
+				this.initializationError?.message ?? 'Cannot trigger manual sync until setup completes.',
+			);
+		}
+
+		const operationId = crypto.randomUUID();
+		const startedAt = new Date().toISOString();
+		const frameId = request.frameHost ?? this.currentSettings.frameHost ?? this.initialFrameHost;
+
+		await this.stateStore.update((state) => {
+			state.operations[operationId] = {
+				id: operationId,
+				startedAt,
+				completedAt: null,
+				status: 'running',
+				photoIds: [],
+				error: null,
+				attempt: 1,
+				frameId,
+			};
+			return state;
+		});
+
+		try {
+			const summary = await this.syncPhotos();
+			const completedAt = new Date().toISOString();
+
+			await this.stateStore.update((state) => {
+				const operation = state.operations[operationId];
+				if (operation) {
+					operation.completedAt = completedAt;
+					operation.status = summary.failed > 0 ? 'failed' : 'succeeded';
+					operation.photoIds = summary.photoIds;
+					operation.error =
+						summary.failed > 0 ? 'One or more photos failed to sync' : null;
+				}
+				return state;
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.logger.error({ error: message, operationId }, 'Manual sync failed');
+			await this.stateStore.update((state) => {
+				const operation = state.operations[operationId];
+				if (operation) {
+					operation.completedAt = new Date().toISOString();
+					operation.status = 'failed';
+					operation.error = message;
+				}
+				return state;
+			});
+		}
+
+		return { operationId };
+	}
+
+	async updateConfiguration(
+		settings: SettingsUpdateRequest,
+	): Promise<SettingsConfigSnapshot> {
+		this.sourceAlbum = settings.syncAlbumName;
+		this.config.iCloud.sourceAlbum = settings.syncAlbumName;
+
+		if (settings.frameHost && settings.frameHost.trim().length > 0) {
+			this.config.frame.host = settings.frameHost.trim();
+		}
+
+		if (typeof settings.iCloudUsername === 'string') {
+			this.config.iCloud.username = settings.iCloudUsername.trim();
+		}
+
+		if (typeof settings.iCloudPassword === 'string' && settings.iCloudPassword.trim().length > 0) {
+			this.config.iCloud.password = settings.iCloudPassword;
+		}
+
+		this.currentSettings = {
+			...this.currentSettings,
+			syncAlbumName: this.sourceAlbum,
+			frameHost: this.config.frame.host,
+			syncIntervalSeconds: typeof settings.syncIntervalSeconds === 'number'
+				? settings.syncIntervalSeconds
+				: this.currentSettings?.syncIntervalSeconds,
+			logLevel: settings.logLevel ?? this.currentSettings?.logLevel,
+			corsOrigin: settings.corsOrigin ?? this.currentSettings?.corsOrigin,
+			iCloudUsername: this.config.iCloud.username,
+			hasICloudPassword: Boolean(this.config.iCloud.password),
+			webPort: this.webPort,
+		};
+
+		await this.stateStore.updateAlbumState(this.sourceAlbum, {
+			id: this.sourceAlbum,
+			name: this.sourceAlbum,
+		});
+
+		this.refreshCurrentSettings();
+		await this.initialize();
+		return this.currentSettings;
+	}
 }
-
-
-// Remove duplicate/old class definition and members below:
-// ...existing code...

@@ -36,12 +36,10 @@ export interface AppConfig {
 /**
  * Validates required environment variables
  */
-function validateEnv(key: string): string {
+function readRequiredEnv(key: string): string {
 	const value = process.env[key];
 	if (!value || value.trim() === '') {
-		throw new Error(
-			`Missing required environment variable: ${key}. Please check your .env file.`
-		);
+		return '';
 	}
 	return value;
 }
@@ -58,9 +56,9 @@ function getEnvOrDefault(key: string, defaultValue: string): string {
  */
 export function createAppConfigFromEnv(): AppConfig {
 	// Validate required variables
-	const iCloudUsername = validateEnv('ICLOUD_USERNAME');
-	const iCloudPassword = validateEnv('ICLOUD_PASSWORD');
-	const frameHost = validateEnv('SAMSUNG_FRAME_HOST');
+	const iCloudUsername = readRequiredEnv('ICLOUD_USERNAME');
+	const iCloudPassword = readRequiredEnv('ICLOUD_PASSWORD');
+	const frameHost = readRequiredEnv('SAMSUNG_FRAME_HOST');
 
 	// Optional with defaults
 	const iCloudSourceAlbum = getEnvOrDefault('ICLOUD_SOURCE_ALBUM', 'Frame Sync');

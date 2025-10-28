@@ -1,7 +1,8 @@
 # node modules
-node_modules
+node_modules/
 # build path
-dist
+dist/
+build/
 # environmental variables
 .env
 # yarn error log
@@ -9,4 +10,5 @@ yarn-error.log
 # vscode config
 .vscode
 # test coverage
-coverage
+coverage/
+*.min.js

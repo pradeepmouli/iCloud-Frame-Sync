@@ -1,103 +1,245 @@
 import {
-  Delete as DeleteIcon,
-  DeviceHub as DeviceHubIcon,
-  Info as InfoIcon,
-  Palette as PaletteIcon,
-  PowerSettingsNew as PowerIcon,
-  Refresh as RefreshIcon,
-  Tv as TvIcon,
-  Visibility as VisibilityIcon,
+	CloudUpload as CloudUploadIcon,
+	Delete as DeleteIcon,
+	Image as ImageIcon,
+	Lightbulb as LightbulbIcon,
+	PowerSettingsNew as PowerIcon,
+	Refresh as RefreshIcon,
+	Tv as TvIcon,
 } from '@mui/icons-material';
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CardMedia,
-  Chip,
-  Divider,
-  GridLegacy as Grid,
-  Paper,
-  Stack,
-  Typography,
-  alpha,
+	Alert,
+	Avatar,
+	Box,
+	Button,
+	Card,
+	CardActions,
+	CardContent,
+	Checkbox,
+	Chip,
+	Divider,
+	FormControlLabel,
+	GridLegacy as Grid,
+	IconButton,
+	LinearProgress,
+	Stack,
+	Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import PhotoDetailModal from '../components/PhotoDetailModal';
-import { api, type FrameArt, type FrameStatus } from '../services/api';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { api } from '../services/api';
+import type {
+	FrameArtPage,
+	FrameArtSummary,
+	FramePowerStateResponse,
+	FrameStatusSnapshot,
+} from '../types/index';
+
+const ART_PAGE_SIZE = 12;
+
+function formatDate(value?: string | null): string {
+  if (!value) {
+    return 'Unknown';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
+function formatDimensions(art: FrameArtSummary): string {
+  if (art.width && art.height) {
+    return `${art.width} × ${art.height}`;
+  }
+  return '—';
+}
+
+async function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        if (result.includes(',')) {
+          const [, base64] = result.split(',');
+          resolve(base64 ?? '');
+        } else {
+          resolve(result);
+        }
+      } else {
+  reject(new Error('Failed to read file data'));
+      }
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Failed to read file data'));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function FrameManager() {
-  const [frameStatus, setFrameStatus] = useState<FrameStatus | null>(null);
-  const [frameArt, setFrameArt] = useState<FrameArt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [artLoading, setArtLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<{
-    [key: string]: boolean;
-  }>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [selectedArt, setSelectedArt] = useState<FrameArt | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [status, setStatus] = useState<FrameStatusSnapshot | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [artPage, setArtPage] = useState<FrameArtPage | null>(null);
+  const [artError, setArtError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [loadingArt, setLoadingArt] = useState(true);
+  const [powerBusy, setPowerBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [setAsCurrent, setSetAsCurrent] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    loadFrameStatus();
-    loadFrameArt();
+  const loadStatus = useCallback(async () => {
+    setLoadingStatus(true);
+    try {
+      const snapshot = await api.getFrameStatus();
+      setStatus(snapshot);
+      setStatusError(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load frame status.';
+      setStatusError(message);
+      setStatus(null);
+    } finally {
+      setLoadingStatus(false);
+    }
   }, []);
 
-  const loadFrameStatus = async () => {
+  const loadArt = useCallback(async (targetPage: number = 1) => {
+    setLoadingArt(true);
     try {
-      const status = await api.getFrameStatus();
-      setFrameStatus(status);
-      setMessage(null);
-    } catch (err: any) {
-      setMessage(`Failed to load frame status: ${err.message}`);
+      const response = await api.listFrameArt({ page: targetPage, pageSize: ART_PAGE_SIZE });
+      setArtPage(response);
+      setPage(response.pagination.page);
+      setArtError(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load frame art.';
+      setArtError(message);
+      setArtPage(null);
     } finally {
-      setLoading(false);
+      setLoadingArt(false);
     }
-  };
+  }, []);
 
-  const loadFrameArt = async () => {
-    setArtLoading(true);
+  useEffect(() => {
+    void loadStatus();
+    void loadArt(1);
+  }, [loadStatus, loadArt]);
+
+  const totalPages = useMemo(() => {
+    if (!artPage) {
+      return 1;
+    }
+    const { pageSize, total } = artPage.pagination;
+    return Math.max(1, Math.ceil(total / pageSize));
+  }, [artPage]);
+
+  const currentPage = artPage?.pagination.page ?? page;
+
+  const handleRefreshStatus = useCallback(() => {
+    setSuccessMessage(null);
+    void loadStatus();
+  }, [loadStatus]);
+
+  const handleRefreshArt = useCallback(() => {
+    setSuccessMessage(null);
+    void loadArt(currentPage);
+  }, [currentPage, loadArt]);
+
+  const handlePageChange = useCallback(
+    (direction: 'previous' | 'next') => {
+      if (!artPage) {
+        return;
+      }
+      const nextPage = direction === 'previous' ? currentPage - 1 : currentPage + 1;
+      if (nextPage < 1 || nextPage > totalPages) {
+        return;
+      }
+      setSuccessMessage(null);
+      void loadArt(nextPage);
+    },
+    [artPage, currentPage, loadArt, totalPages],
+  );
+
+  const handlePowerToggle = useCallback(async () => {
+    if (powerBusy) {
+      return;
+    }
+    setPowerBusy(true);
+    setSuccessMessage(null);
     try {
-      const result = await api.getFrameArt();
-      setFrameArt(result.art);
-    } catch (err: any) {
-      console.error('Failed to load frame art:', err);
-      setFrameArt([]);
+      const nextAction = status?.isOn ? 'off' : 'on';
+      const response: FramePowerStateResponse = await api.setFramePower(nextAction);
+      await loadStatus();
+      setSuccessMessage(
+        response.wasToggled
+          ? `Frame turned ${response.isOn ? 'on' : 'off'}.`
+          : 'Frame power state unchanged.',
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update power state.';
+      setStatusError(message);
     } finally {
-      setArtLoading(false);
+      setPowerBusy(false);
     }
-  };
+  }, [loadStatus, powerBusy, status?.isOn]);
 
-  const deleteArt = async (artId: string) => {
-    setActionLoading({ ...actionLoading, [artId]: true });
-    try {
-      const result = await api.deleteFrameArt(artId);
-      setMessage(result.message);
-      await loadFrameArt();
-    } catch (err: any) {
-      setMessage(`Failed to delete art: ${err.message}`);
-    } finally {
-      setActionLoading({ ...actionLoading, [artId]: false });
-    }
-  };
+  const handleDeleteArt = useCallback(
+    async (artId: string) => {
+      setSuccessMessage(null);
+      try {
+        await api.deleteFrameArt(artId);
+        setArtError(null);
+        setSuccessMessage('Art removed from frame.');
+        await loadArt(currentPage);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to delete frame art.';
+        setArtError(message);
+      }
+    },
+    [currentPage, loadArt],
+  );
 
-  const refreshStatus = () => {
-    setLoading(true);
-    Promise.all([loadFrameStatus(), loadFrameArt()]);
-  };
+  const handleSelectFile = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
-  const openDetailModal = (art: FrameArt) => {
-    setSelectedArt(art);
-    setDetailModalOpen(true);
-  };
-
-  const closeDetailModal = () => {
-    setDetailModalOpen(false);
-    setSelectedArt(null);
-  };
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+      setUploading(true);
+      setSuccessMessage(null);
+      try {
+        const base64 = await readFileAsBase64(file);
+        if (!base64) {
+          throw new Error('Selected file produced no data.');
+        }
+        await api.uploadFrameArt({
+          filename: file.name,
+          contentType: file.type,
+          data: base64,
+          setAsCurrent,
+        });
+        setArtError(null);
+        setSuccessMessage('Art uploaded to frame.');
+        await Promise.all([loadArt(1), loadStatus()]);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to upload art.';
+        setArtError(message);
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    },
+    [loadArt, loadStatus, setAsCurrent],
+  );
 
   return (
     <Box>
@@ -116,474 +258,268 @@ export default function FrameManager() {
         Frame Manager
       </Typography>
 
-      {message && (
-        <Alert
-          severity={
-            message.includes('Error') || message.includes('Failed')
-              ? 'error'
-              : 'success'
-          }
-          sx={{ mb: 3 }}
-        >
-          {message}
-        </Alert>
-      )}
+      <Stack spacing={2} sx={{ mb: 3 }}>
+        {statusError && <Alert severity="error">{statusError}</Alert>}
+        {artError && <Alert severity="error">{artError}</Alert>}
+        {successMessage && <Alert severity="success">{successMessage}</Alert>}
+      </Stack>
 
       <Grid container spacing={3}>
-        {/* Frame Status Card */}
-        <Grid item xs={12} lg={8}>
+        <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={2}
-                sx={{ mb: 3 }}
-              >
-                <Avatar
-                  sx={{ bgcolor: 'secondary.main', width: 48, height: 48 }}
-                >
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Avatar sx={{ bgcolor: 'secondary.main', width: 48, height: 48 }}>
                   <TvIcon />
                 </Avatar>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" component="h2">
-                    Samsung Frame TV Status
-                  </Typography>
+                <Box>
+                  <Typography variant="h6">Frame Status</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Current device status and information
+                    Review connectivity, power, and art mode indicators.
                   </Typography>
                 </Box>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={refreshStatus}
-                  disabled={loading}
-                >
-                  {loading ? 'Loading...' : 'Refresh'}
-                </Button>
               </Stack>
 
-              {frameStatus ? (
-                <Box>
-                  <Grid container spacing={3} sx={{ mb: 3 }}>
-                    <Grid item xs={12} sm={6}>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          textAlign: 'center',
-                          bgcolor: alpha('#ffffff', 0.02),
-                        }}
-                      >
-                        <PowerIcon
-                          sx={{
-                            fontSize: 40,
-                            color: frameStatus.isOn
-                              ? 'success.main'
-                              : 'error.main',
-                            mb: 1,
-                          }}
-                        />
-                        <Typography variant="h6" gutterBottom>
-                          Power Status
-                        </Typography>
-                        <Chip
-                          label={frameStatus.isOn ? 'ON' : 'OFF'}
-                          color={frameStatus.isOn ? 'success' : 'error'}
-                          variant="filled"
-                        />
-                      </Paper>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          textAlign: 'center',
-                          bgcolor: alpha('#ffffff', 0.02),
-                        }}
-                      >
-                        <PaletteIcon
-                          sx={{
-                            fontSize: 40,
-                            color: frameStatus.inArtMode
-                              ? 'success.main'
-                              : 'error.main',
-                            mb: 1,
-                          }}
-                        />
-                        <Typography variant="h6" gutterBottom>
-                          Art Mode
-                        </Typography>
-                        <Chip
-                          label={frameStatus.inArtMode ? 'ACTIVE' : 'INACTIVE'}
-                          color={frameStatus.inArtMode ? 'success' : 'error'}
-                          variant="filled"
-                        />
-                      </Paper>
-                    </Grid>
-                  </Grid>
-
-                  {frameStatus.deviceInfo && (
+              {loadingStatus ? (
+                <LinearProgress sx={{ mt: 2 }} />
+              ) : status ? (
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip
+                      label={status.isReachable ? 'Reachable' : 'Offline'}
+                      color={status.isReachable ? 'success' : 'warning'}
+                      size="small"
+                    />
+                    <Chip
+                      label={status.isOn ? 'Powered On' : 'Powered Off'}
+                      color={status.isOn ? 'primary' : 'default'}
+                      size="small"
+                    />
+                    <Chip
+                      label={status.inArtMode ? 'Art Mode' : 'TV Mode'}
+                      size="small"
+                    />
+                  </Stack>
+                  <Typography variant="body2">Host: {status.host}</Typography>
+                  <Typography variant="body2">
+                    Last Checked: {formatDate(status.lastCheckedAt)}
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <LightbulbIcon fontSize="small" />
+                    <Typography variant="body2">
+                      Brightness: {status.brightness ?? '—'}
+                    </Typography>
+                  </Stack>
+                  {status.device && (
                     <Box>
-                      <Typography
-                        variant="h6"
-                        gutterBottom
-                        sx={{ mt: 3, mb: 2 }}
-                      >
-                        <DeviceHubIcon
-                          sx={{ verticalAlign: 'middle', mr: 1 }}
-                        />
-                        Device Information
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="subtitle2" gutterBottom>
+                        Device Details
                       </Typography>
-                      <Paper
-                        sx={{
-                          p: 2,
-                          bgcolor: alpha('#ffffff', 0.02),
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          overflow: 'auto',
-                        }}
-                      >
-                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                          {JSON.stringify(frameStatus.deviceInfo, null, 2)}
-                        </pre>
-                      </Paper>
+                      <Typography variant="body2">
+                        Name: {status.device.name ?? '—'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Model: {status.device.model ?? '—'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Serial: {status.device.serialNumber ?? '—'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Firmware: {status.device.firmwareVersion ?? '—'}
+                      </Typography>
                     </Box>
                   )}
-                </Box>
+                  {status.currentArt && (
+                    <Box>
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="subtitle2" gutterBottom>
+                        Current Art
+                      </Typography>
+                      <Typography variant="body2">{status.currentArt.name}</Typography>
+                      <Typography variant="body2">
+                        Added: {formatDate(status.currentArt.addedAt)}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
               ) : (
-                <Alert severity="warning" variant="outlined">
-                  <Typography variant="body1">
-                    Unable to connect to Samsung Frame TV
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    Please check your configuration and ensure the TV is on the
-                    same network.
-                  </Typography>
-                </Alert>
+                <Typography variant="body2" color="text.secondary">
+                  Unable to retrieve frame status. Verify the host information and retry.
+                </Typography>
               )}
             </CardContent>
+            <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleRefreshStatus}
+                disabled={loadingStatus}
+              >
+                Refresh Status
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<PowerIcon />}
+                onClick={handlePowerToggle}
+                disabled={loadingStatus || powerBusy}
+                color={status?.isOn ? 'error' : 'primary'}
+              >
+                {powerBusy ? 'Updating…' : status?.isOn ? 'Power Off' : 'Power On'}
+              </Button>
+            </CardActions>
           </Card>
         </Grid>
 
-        {/* Quick Actions Card */}
-        <Grid item xs={12} lg={4}>
+        <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Quick Actions
-              </Typography>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
+                  <CloudUploadIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">Upload Art</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Upload a JPEG or PNG asset directly to your Frame.
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+
               <Stack spacing={2}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={setAsCurrent}
+                      onChange={(event) => setSetAsCurrent(event.target.checked)}
+                    />
+                  }
+                  label="Set as current art after upload"
+                />
                 <Button
                   variant="contained"
-                  fullWidth
-                  startIcon={<RefreshIcon />}
-                  onClick={refreshStatus}
-                  disabled={loading}
+                  startIcon={<CloudUploadIcon />}
+                  onClick={handleSelectFile}
+                  disabled={uploading}
                 >
-                  Refresh Status
-                </Button>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<InfoIcon />}
-                  disabled={!frameStatus}
-                >
-                  Device Info
+                  {uploading ? 'Uploading…' : 'Choose File'}
                 </Button>
               </Stack>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="body2" color="text.secondary">
-                <strong>Connected:</strong> {frameStatus ? 'Yes' : 'No'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Art Count:</strong>{' '}
-                {artLoading ? 'Loading...' : frameArt.length}
-              </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Art Gallery */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mb: 3 }}
-              >
-                <Typography variant="h6">
-                  Art on Frame ({frameArt.length})
-                </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<RefreshIcon />}
-                  onClick={loadFrameArt}
-                  disabled={artLoading}
-                >
-                  {artLoading ? 'Loading...' : 'Refresh Art'}
-                </Button>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                <Typography variant="h6">Available Art</Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<RefreshIcon />}
+                    onClick={handleRefreshArt}
+                    disabled={loadingArt}
+                  >
+                    Refresh Art
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handlePageChange('previous')}
+                    disabled={loadingArt || currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handlePageChange('next')}
+                    disabled={loadingArt || currentPage >= totalPages}
+                  >
+                    Next
+                  </Button>
+                </Stack>
               </Stack>
 
-              {artLoading ? (
+              {loadingArt ? (
+                <LinearProgress />
+              ) : !artPage || artPage.items.length === 0 ? (
                 <Box sx={{ textAlign: 'center', py: 6 }}>
-                  <RefreshIcon
-                    sx={{
-                      fontSize: 64,
-                      color: 'primary.main',
-                      mb: 2,
-                      animation: 'spin 1s linear infinite',
-                      '@keyframes spin': {
-                        '0%': {
-                          transform: 'rotate(0deg)',
-                        },
-                        '100%': {
-                          transform: 'rotate(360deg)',
-                        },
-                      },
-                    }}
-                  />
+                  <ImageIcon sx={{ fontSize: 56, color: 'text.secondary', mb: 2 }} />
                   <Typography variant="h6" gutterBottom>
-                    Loading art thumbnails...
+                    No art found on the frame.
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Fetching art from your Samsung Frame TV
+                    Upload art to populate this list.
                   </Typography>
-                </Box>
-              ) : frameArt.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 6 }}>
-                  <PaletteIcon
-                    sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-                  />
-                  <Typography variant="h6" gutterBottom>
-                    No art found on the Frame TV
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 3 }}
-                  >
-                    Art will appear here after photos are uploaded to your
-                    Samsung Frame TV.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    onClick={refreshStatus}
-                    startIcon={<RefreshIcon />}
-                  >
-                    Refresh
-                  </Button>
                 </Box>
               ) : (
-                <Grid container spacing={3}>
-                  {frameArt.map((art) => (
-                    <Grid
-                      item
-                      xs={12}
-                      sm={6}
-                      md={4}
-                      lg={3}
-                      key={art.id || art.name}
-                    >
-                      <Card
-                        sx={{
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                        }}
-                      >
-                        {art.thumbnail ? (
-                          <CardMedia
-                            component="img"
-                            height="200"
-                            image={art.thumbnail}
-                            alt={art.name || 'Frame Art'}
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Page {currentPage} of {totalPages}
+                  </Typography>
+                  <Grid container spacing={3}>
+                    {artPage.items.map((art: FrameArtSummary) => {
+                      const isCurrent = status?.currentArt?.id === art.id;
+                      return (
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={art.id}>
+                          <Card
+                            variant={isCurrent ? 'outlined' : undefined}
                             sx={{
-                              objectFit: 'cover',
-                              transition: 'transform 0.3s ease-in-out',
-                              '&:hover': {
-                                transform: 'scale(1.05)',
-                              },
-                            }}
-                          />
-                        ) : (
-                          <Box
-                            sx={{
-                              height: 200,
-                              bgcolor: alpha('#ffffff', 0.02),
+                              height: '100%',
+                              borderColor: isCurrent ? 'primary.main' : undefined,
                               display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
                               flexDirection: 'column',
-                              gap: 1,
+                              justifyContent: 'space-between',
                             }}
                           >
-                            <PaletteIcon
-                              sx={{ fontSize: 48, color: 'text.secondary' }}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              No thumbnail available
-                            </Typography>
-                          </Box>
-                        )}
-
-                        <CardContent sx={{ flexGrow: 1 }}>
-                          <Typography
-                            variant="subtitle1"
-                            component="h3"
-                            gutterBottom
-                            noWrap
-                            title={art.name || art.id || 'Unknown'}
-                          >
-                            {art.name || art.id || 'Unknown'}
-                          </Typography>
-
-                          <Stack spacing={1}>
-                            {art.dimensions &&
-                              (art.dimensions.width > 0 ||
-                                art.dimensions.height > 0) && (
-                                <Chip
-                                  label={`${art.dimensions.width} × ${art.dimensions.height}`}
-                                  size="small"
-                                  icon={<InfoIcon />}
-                                  variant="outlined"
-                                />
+                            <CardContent>
+                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                <ImageIcon color={isCurrent ? 'primary' : 'disabled'} />
+                                <Typography variant="subtitle1" noWrap>
+                                  {art.name}
+                                </Typography>
+                              </Stack>
+                              <Typography variant="body2" color="text.secondary">
+                                Category: {art.categoryId ?? '—'}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Dimensions: {formatDimensions(art)}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Added: {formatDate(art.addedAt)}
+                              </Typography>
+                              {art.isFavorite && (
+                                <Chip label="Favorite" color="secondary" size="small" sx={{ mt: 1 }} />
                               )}
-                            {art.categoryId && (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
+                            </CardContent>
+                            <CardActions sx={{ justifyContent: 'flex-end' }}>
+                              <IconButton
+                                aria-label={`Delete ${art.name}`}
+                                onClick={() => handleDeleteArt(art.id)}
+                                disabled={loadingArt}
                               >
-                                Category: {art.categoryId}
-                              </Typography>
-                            )}
-                            {art.dateAdded && (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                Added:{' '}
-                                {new Date(art.dateAdded).toLocaleDateString()}
-                              </Typography>
-                            )}
-                            {art.matte && (
-                              <Chip
-                                label={`Matte: ${art.matte.type}`}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                              />
-                            )}
-                          </Stack>
-                        </CardContent>
-
-                        <CardActions sx={{ p: 2, pt: 0 }}>
-                          <Stack spacing={1} sx={{ width: '100%' }}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<VisibilityIcon />}
-                              onClick={() => openDetailModal(art)}
-                              fullWidth
-                            >
-                              View Details
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              size="small"
-                              startIcon={<DeleteIcon />}
-                              onClick={() => deleteArt(art.id || art.name)}
-                              disabled={actionLoading[art.id || art.name]}
-                              fullWidth
-                            >
-                              {actionLoading[art.id || art.name]
-                                ? 'Deleting...'
-                                : 'Delete from Frame'}
-                            </Button>
-                          </Stack>
-                        </CardActions>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
+                                <DeleteIcon />
+                              </IconButton>
+                            </CardActions>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </>
               )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Tips Card */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Frame Management Tips
-              </Typography>
-              <Stack spacing={1} component="ul" sx={{ pl: 2, m: 0 }}>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Make sure your Samsung Frame TV is on the same network as this
-                  application
-                </Typography>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  The TV must be powered on to manage art and check status
-                </Typography>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Art Mode should be enabled on your TV to display uploaded
-                  photos
-                </Typography>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Use the Photo Gallery to upload new photos to the Frame
-                </Typography>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Deleted art cannot be recovered unless you upload it again
-                </Typography>
-                <Typography
-                  component="li"
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Refresh the status if you've made changes directly on the TV
-                </Typography>
-              </Stack>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-
-      {/* Photo Detail Modal */}
-      {selectedArt && (
-        <PhotoDetailModal
-          open={detailModalOpen}
-          onClose={closeDetailModal}
-          photo={selectedArt}
-          photoType="frame"
-        />
-      )}
     </Box>
   );
 }

@@ -201,6 +201,15 @@ export class iCloudEndpoint implements Endpoint {
 		}
 	}
 
+	async provideMfaCode(code: string): Promise<void> {
+		await this.iCloudClient.provideMfaCode(code);
+		await this.iCloudClient.awaitReady;
+		this.logger.info(this.iCloudClient.status);
+		this.logger.info(
+			'Hello, ' + this.iCloudClient?.accountInfo?.dsInfo?.fullName,
+		);
+	}
+
 	async initialize(): Promise<void> {
 		await this.authenticate(this.config.username, this.config.password);
 		await this.iCloudClient.awaitReady;

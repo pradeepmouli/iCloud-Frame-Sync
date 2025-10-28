@@ -1,133 +1,185 @@
 import {
-  Delete as DeleteIcon,
-  Info as InfoIcon,
-  PhotoLibrary as PhotoLibraryIcon,
-  Refresh as RefreshIcon,
-  Send as SendIcon,
+	Info as InfoIcon,
+	PhotoLibrary as PhotoLibraryIcon,
+	Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CardMedia,
-  Chip,
-  FormControl,
-  GridLegacy as Grid,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
-  Skeleton,
-  Stack,
-  Typography,
+	Alert,
+	Avatar,
+	Box,
+	Button,
+	Card,
+	CardContent,
+	Chip,
+	FormControl,
+	GridLegacy as Grid,
+	InputLabel,
+	MenuItem,
+	Select,
+	Skeleton,
+	Stack,
+	Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import PhotoDetailModal from '../components/PhotoDetailModal';
-import { api, type Album, type Photo } from '../services/api';
+import type { SelectChangeEvent } from '@mui/material/Select';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-/**
- * PhotoGallery component allows users to view and manage photos from their iCloud albums.
- * Users can select an album, view photos, send them to a Samsung Frame TV, or delete them from iCloud.
- */
+import { api } from '../services/api';
+import type { AlbumSummary, PhotoPage, PhotoSummary } from '../types/index';
+
+const PAGE_SIZE = 24;
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return 'Unknown';
+  }
+  const suffixes = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(suffixes.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const value = bytes / 1024 ** index;
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${suffixes[index]}`;
+}
+
+function formatDate(input: string | null): string {
+  if (!input) {
+    return 'Never';
+  }
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return input;
+  }
+  return date.toLocaleString();
+}
+
+function resolveStatusColor(status: PhotoSummary['status']): 'default' | 'success' | 'warning' | 'error' {
+  switch (status) {
+    case 'uploaded':
+      return 'success';
+    case 'uploading':
+      return 'warning';
+    case 'failed':
+      return 'error';
+    default:
+      return 'default';
+  }
+}
 
 export default function PhotoGallery() {
-  const [albums, setAlbums] = useState<string[]>([]);
-  const [selectedAlbum, setSelectedAlbum] = useState<string>('Frame Sync');
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<{ [key: string]: string }>(
-    {},
-  );
-  const [message, setMessage] = useState<string | null>(null);
+  const [albums, setAlbums] = useState<AlbumSummary[]>([]);
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string>('');
+  const [photoPage, setPhotoPage] = useState<PhotoPage | null>(null);
+  const [loadingAlbums, setLoadingAlbums] = useState(false);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Photo detail modal state
-  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-
-  useEffect(() => {
-    loadAlbums();
+  const loadAlbums = useCallback(async () => {
+    setLoadingAlbums(true);
+    try {
+      const albumList = await api.listAlbums();
+      setAlbums(albumList);
+      if (albumList.length > 0) {
+        setSelectedAlbumId((current) => current || albumList[0].id);
+      } else {
+        setSelectedAlbumId('');
+      }
+      setErrorMessage(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load albums.';
+      setErrorMessage(message);
+      setAlbums([]);
+      setSelectedAlbumId('');
+    } finally {
+      setLoadingAlbums(false);
+    }
   }, []);
 
+  const loadPhotos = useCallback(
+    async (albumId: string, page: number = 1) => {
+      if (!albumId) {
+        setPhotoPage(null);
+        return;
+      }
+
+      setLoadingPhotos(true);
+      try {
+        const pageResponse = await api.listPhotos({
+          albumId,
+          page,
+          pageSize: PAGE_SIZE,
+        });
+        setPhotoPage(pageResponse);
+        setErrorMessage(null);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to load photos.';
+        setErrorMessage(message);
+        setPhotoPage(null);
+      } finally {
+        setLoadingPhotos(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (selectedAlbum) {
-      loadPhotos(selectedAlbum);
+    loadAlbums().catch(() => {
+      setErrorMessage('Failed to load albums.');
+    });
+  }, [loadAlbums]);
+
+  useEffect(() => {
+    if (selectedAlbumId) {
+      loadPhotos(selectedAlbumId).catch(() => {
+        setErrorMessage('Failed to load photos.');
+      });
+    } else {
+      setPhotoPage(null);
     }
-  }, [selectedAlbum]);
+  }, [loadPhotos, selectedAlbumId]);
 
-  const loadAlbums = async () => {
-    try {
-      const result = await api.getAlbums();
-      setAlbums(result.albums);
-    } catch (err: any) {
-      setMessage(`Failed to load albums: ${err.message}`);
+  const handleAlbumChange = (event: SelectChangeEvent<string>) => {
+    setSelectedAlbumId(event.target.value);
+  };
+
+  const handleRefreshPhotos = () => {
+    if (!selectedAlbumId) {
+      return;
     }
+    const currentPage = photoPage?.pagination.page ?? 1;
+    loadPhotos(selectedAlbumId, currentPage).catch(() => {
+      setErrorMessage('Failed to refresh photos.');
+    });
   };
 
-  const loadPhotos = async (albumName: string) => {
-    setLoading(true);
-    try {
-      const result = await api.getPhotosInAlbum(albumName);
-      setPhotos(result.photos);
-      setMessage(null);
-    } catch (err: any) {
-      setMessage(`Failed to load photos: ${err.message}`);
-      setPhotos([]);
-    } finally {
-      setLoading(false);
+  const handlePageChange = (direction: 'previous' | 'next') => {
+    if (!photoPage || !selectedAlbumId) {
+      return;
     }
-  };
-
-  const sendToFrame = async (photoId: string) => {
-    setActionLoading({ ...actionLoading, [photoId]: 'sending' });
-    try {
-      const result = await api.sendPhotoToFrame(photoId);
-      setMessage(result.message);
-    } catch (err: any) {
-      setMessage(`Failed to send photo: ${err.message}`);
-    } finally {
-      setActionLoading({ ...actionLoading, [photoId]: '' });
+    const { page, pageSize, total } = photoPage.pagination;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const nextPage = direction === 'previous' ? page - 1 : page + 1;
+    if (nextPage < 1 || nextPage > totalPages) {
+      return;
     }
+    loadPhotos(selectedAlbumId, nextPage).catch(() => {
+      setErrorMessage('Failed to change page.');
+    });
   };
 
-  const deleteFromICloud = async (photoId: string) => {
-    setActionLoading({ ...actionLoading, [photoId]: 'deleting' });
-    try {
-      const result = await api.deletePhotoFromICloud(photoId);
-      setMessage(result.message);
-      await loadPhotos(selectedAlbum);
-    } catch (err: any) {
-      setMessage(`Failed to delete photo: ${err.message}`);
-    } finally {
-      setActionLoading({ ...actionLoading, [photoId]: '' });
+  const currentAlbum = useMemo(
+    () => albums.find((album) => album.id === selectedAlbumId) ?? null,
+    [albums, selectedAlbumId],
+  );
+
+  const totalPages = useMemo(() => {
+    if (!photoPage) {
+      return 0;
     }
-  };
+    const { pageSize, total } = photoPage.pagination;
+    if (pageSize <= 0) {
+      return 0;
+    }
+    return Math.max(1, Math.ceil(total / pageSize));
+  }, [photoPage]);
 
-  // Modal handlers
-  const openDetailModal = (photo: Photo) => {
-    setSelectedPhoto(photo);
-    setDetailModalOpen(true);
-  };
-
-  const closeDetailModal = () => {
-    setDetailModalOpen(false);
-    setSelectedPhoto(null);
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString();
-  };
+  const hasAlbums = albums.length > 0;
 
   return (
     <Box>
@@ -146,20 +198,12 @@ export default function PhotoGallery() {
         Photo Gallery
       </Typography>
 
-      {message && (
-        <Alert
-          severity={
-            message.includes('Error') || message.includes('Failed')
-              ? 'error'
-              : 'success'
-          }
-          sx={{ mb: 3 }}
-        >
-          {message}
+      {errorMessage && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {errorMessage}
         </Alert>
       )}
 
-      {/* Album Selection */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
@@ -171,41 +215,51 @@ export default function PhotoGallery() {
                 Album Selection
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Choose an iCloud Photos album to browse
+                Choose an iCloud album to inspect recent sync results.
               </Typography>
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={2} alignItems="center">
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Select Album</InputLabel>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+            <FormControl sx={{ minWidth: 240 }} disabled={loadingAlbums || !hasAlbums}>
+              <InputLabel id="album-select-label">Select Album</InputLabel>
               <Select
-                value={selectedAlbum}
-                onChange={(e) => setSelectedAlbum(e.target.value)}
+                labelId="album-select-label"
+                value={selectedAlbumId}
                 label="Select Album"
+                onChange={handleAlbumChange}
               >
                 {albums.map((album) => (
-                  <MenuItem key={album} value={album}>
-                    {album}
+                  <MenuItem key={album.id} value={album.id}>
+                    {album.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
 
-            <Button
-              variant="contained"
-              startIcon={<RefreshIcon />}
-              onClick={() => loadPhotos(selectedAlbum)}
-              disabled={loading}
-            >
-              {loading ? 'Loading...' : 'Refresh Photos'}
-            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={loadAlbums}
+                disabled={loadingAlbums}
+              >
+                {loadingAlbums ? 'Refreshing…' : 'Refresh Albums'}
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<RefreshIcon />}
+                onClick={handleRefreshPhotos}
+                disabled={loadingPhotos || !selectedAlbumId}
+              >
+                {loadingPhotos ? 'Loading…' : 'Refresh Photos'}
+              </Button>
+            </Stack>
           </Stack>
         </CardContent>
       </Card>
 
-      {/* Photos Grid */}
-      {loading ? (
+      {loadingPhotos ? (
         <Grid container spacing={3}>
           {[...Array(6)].map((_, index) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
@@ -219,23 +273,27 @@ export default function PhotoGallery() {
             </Grid>
           ))}
         </Grid>
-      ) : photos.length === 0 ? (
+      ) : !photoPage || photoPage.items.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
-            <PhotoLibraryIcon
-              sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }}
-            />
+            <PhotoLibraryIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              No photos found in the selected album
+              {selectedAlbumId
+                ? 'No photos recorded for this album yet'
+                : hasAlbums
+                ? 'Select an album to begin'
+                : 'No albums available'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Make sure your application is running and connected to iCloud to
-              see photos.
+              {selectedAlbumId
+                ? 'Sync operations will populate photo metadata after uploads complete.'
+                : 'Albums will appear after the sync service reports them through the API.'}
             </Typography>
             <Button
               variant="contained"
-              onClick={() => loadPhotos(selectedAlbum)}
               startIcon={<RefreshIcon />}
+              onClick={selectedAlbumId ? handleRefreshPhotos : loadAlbums}
+              disabled={loadingPhotos || loadingAlbums}
             >
               Refresh
             </Button>
@@ -243,158 +301,102 @@ export default function PhotoGallery() {
         </Card>
       ) : (
         <Box>
-          <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-            Photos in "{selectedAlbum}" ({photos.length})
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            spacing={2}
+            sx={{ mb: 3 }}
+          >
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {currentAlbum ? currentAlbum.name : 'Album Photos'}
+              </Typography>
+              {currentAlbum && (
+                <Typography variant="body2" color="text.secondary">
+                  {currentAlbum.photoCount} photos • Last synced {formatDate(currentAlbum.lastSyncedAt)}
+                </Typography>
+              )}
+            </Box>
+
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handlePageChange('previous')}
+                disabled={photoPage.pagination.page <= 1 || loadingPhotos}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handlePageChange('next')}
+                disabled={photoPage.pagination.page >= totalPages || loadingPhotos}
+              >
+                Next
+              </Button>
+            </Stack>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Page {photoPage.pagination.page} of {totalPages}
           </Typography>
 
           <Grid container spacing={3}>
-            {photos.map((photo) => (
+            {photoPage.items.map((photo: PhotoSummary) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={photo.id}>
                 <Card
                   sx={{
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
+                    justifyContent: 'space-between',
                   }}
                 >
-                  {photo.filename ? (
-                    <CardMedia
-                      component="img"
-                      height="200"
-                      image={photo.thumbnailUrl || ''}
-                      alt={photo.filename}
-                      sx={{ objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <Box
-                      sx={{
-                        height: 200,
-                        bgcolor: 'background.paper',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <PhotoLibraryIcon
-                        sx={{ fontSize: 48, color: 'text.secondary' }}
-                      />
-                    </Box>
-                  )}
+                  <Box
+                    sx={{
+                      height: 200,
+                      bgcolor: 'background.paper',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <PhotoLibraryIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+                  </Box>
 
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Typography
-                      variant="subtitle1"
-                      component="h3"
-                      gutterBottom
-                      noWrap
-                    >
-                      {photo.filename}
-                    </Typography>
-
+                  <CardContent>
                     <Stack spacing={1}>
+                      <Typography variant="subtitle1" component="h3">
+                        Photo {photo.id}
+                      </Typography>
                       <Chip
-                        label={`${photo.dimensions.width}px × ${photo.dimensions.height}px`}
+                        label={`Status: ${photo.status}`}
                         size="small"
                         icon={<InfoIcon />}
-                        variant="outlined"
+                        variant={photo.status === 'uploaded' ? 'filled' : 'outlined'}
+                        color={resolveStatusColor(photo.status)}
                       />
                       <Typography variant="body2" color="text.secondary">
-                        Size: {formatFileSize(photo.size)}
-                      </Typography>
-                      {/*  <Typography variant="body2" color="text.secondary">
-                        Added: {photo?.addedDate?.toLocaleDateString()}
+                        Album ID: {photo.albumId}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Created: {photo?.created?.toLocaleDateString()}
-                      </Typography> */}
+                        Taken: {formatDate(photo.takenAt)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Format: {photo.format.toUpperCase()}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Size: {formatFileSize(photo.sizeBytes)}
+                      </Typography>
                     </Stack>
                   </CardContent>
-
-                  <CardActions sx={{ p: 2, pt: 0 }}>
-                    <Stack spacing={1} sx={{ width: '100%' }}>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<InfoIcon />}
-                        onClick={() => openDetailModal(photo)}
-                        fullWidth
-                      >
-                        View Details
-                      </Button>
-
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<SendIcon />}
-                        onClick={() => sendToFrame(photo.id)}
-                        disabled={actionLoading[photo.id] === 'sending'}
-                        fullWidth
-                      >
-                        {actionLoading[photo.id] === 'sending'
-                          ? 'Sending...'
-                          : 'Send to Frame'}
-                      </Button>
-
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => deleteFromICloud(photo.id)}
-                        disabled={actionLoading[photo.id] === 'deleting'}
-                        fullWidth
-                      >
-                        {actionLoading[photo.id] === 'deleting'
-                          ? 'Deleting...'
-                          : 'Delete from iCloud'}
-                      </Button>
-                    </Stack>
-                  </CardActions>
                 </Card>
               </Grid>
             ))}
           </Grid>
         </Box>
-      )}
-
-      {/* Tips Card */}
-      <Card sx={{ mt: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Photo Management Tips
-          </Typography>
-          <Stack spacing={1} component="ul" sx={{ pl: 2, m: 0 }}>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Photos are automatically synced when the application is running
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Use "Send to Frame" to manually upload specific photos to your
-              Samsung Frame TV
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Deleting from iCloud will permanently remove the photo from your
-              iCloud Photos
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              The automatic sync process will also delete photos from iCloud
-              after uploading to Frame
-            </Typography>
-            <Typography component="li" variant="body2" color="text.secondary">
-              Refresh the gallery to see the latest photos from your iCloud
-              album
-            </Typography>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Photo Detail Modal */}
-      {selectedPhoto && (
-        <PhotoDetailModal
-          open={detailModalOpen}
-          onClose={closeDetailModal}
-          photo={selectedPhoto}
-          photoType="gallery"
-        />
       )}
     </Box>
   );

@@ -24,6 +24,11 @@ describe('PhotoSyncService (T011 - Incremental Sync)', () => {
 	let mockFrameEndpoint: any;
 	let photoSyncService: PhotoSyncService;
 
+	const markServiceReady = (service: PhotoSyncService): void => {
+		(service as any).ready = true;
+		(service as any).initializationError = null;
+	};
+
 	// Helper to create mock iCloudPhoto objects
 	function createMockiCloudPhoto(
 		id: string,
@@ -87,6 +92,7 @@ describe('PhotoSyncService (T011 - Incremental Sync)', () => {
 			iCloudEndpoint: mockiCloudEndpoint as any,
 			stateStore: mockStateStore as any,
 		});
+		markServiceReady(photoSyncService);
 	});
 
 	afterEach(() => {

@@ -1,4 +1,4 @@
-import exif from 'exif-parser';
+import exif from 'exif-reader';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import * as tls from 'node:tls';
@@ -51,9 +51,8 @@ export class FramePhoto implements Photo {
 	async getExifData(): Promise<any> {
 		if (!this.buffer) return null;
 		try {
-			const parser = exif.create(this.buffer);
-			const result = parser.parse();
-			return result.tags;
+			const exifData = exif(this.buffer);
+			return exifData;
 		} catch (err) {
 			// Could not parse EXIF
 			return null;
@@ -82,6 +81,113 @@ export class FrameEndpoint implements Endpoint {
 			verbosity: config.verbosity || 0,
 		}) as SamsungFrameClientType<any>;
 		this.config = config;
+	}
+
+	getHost(): string {
+		return this.config.host;
+	}
+
+	async getDeviceInfo(): Promise<Record<string, unknown>> {
+		try {
+			return await this.client.getDeviceInfo();
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to retrieve frame device info');
+			throw error;
+		}
+	}
+
+	async isOn(): Promise<boolean> {
+		try {
+			return await this.client.isOn();
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to determine frame power state');
+			throw error;
+		}
+	}
+
+	async togglePower(): Promise<boolean> {
+		try {
+			await this.client.togglePower();
+			return await this.client.isOn();
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to toggle frame power');
+			throw error;
+		}
+	}
+
+	async powerOn(): Promise<boolean> {
+		try {
+			if (await this.client.isOn()) {
+				return true;
+			}
+			await this.client.togglePower();
+			return await this.client.isOn();
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to power on frame');
+			throw error;
+		}
+	}
+
+	async powerOff(): Promise<boolean> {
+		try {
+			if (!(await this.client.isOn())) {
+				return true;
+			}
+			await this.client.togglePower();
+			return !(await this.client.isOn());
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to power off frame');
+			throw error;
+		}
+	}
+
+	async uploadBuffer(
+		buffer: Buffer,
+		options: {
+			filename?: string;
+			contentType?: string;
+			onProgress?: (progress: number) => void;
+		} = {},
+	): Promise<string> {
+		const inferredExtension = (() => {
+			if (options.filename) {
+				const ext = path.extname(options.filename);
+				if (ext) {
+					return ext;
+				}
+			}
+			if (options.contentType && options.contentType.includes('/')) {
+				const parts = options.contentType.split('/');
+				if (parts.length === 2 && parts[1]) {
+					return `.${parts[1].toLowerCase()}`;
+				}
+			}
+			return '.jpg';
+		})();
+
+		const filename = options.filename && options.filename.trim().length > 0
+			? options.filename
+			: `frame-upload-${Date.now()}${inferredExtension}`;
+
+		const photo: Photo = {
+			id: filename,
+			filename,
+			dimensions: { width: 0, height: 0 },
+			size: buffer.byteLength,
+			async download() {
+				return buffer;
+			},
+			async delete() {
+				return false;
+			},
+		};
+
+		try {
+			return await this.upload(photo, options.onProgress);
+		} catch (error) {
+			this.logger.error({ error }, 'Failed to upload art buffer to frame');
+			throw error;
+		}
 	}
 
 	async initialize(): Promise<void> {

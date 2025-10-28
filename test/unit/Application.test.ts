@@ -36,6 +36,8 @@ describe('Application', () => {
 			close: sinon.stub().resolves(),
 			iCloud: {},
 			frame: {},
+			isReady: sinon.stub().returns(true),
+			getLastError: sinon.stub().returns(null),
 		};
 
 		mockSyncScheduler = {
@@ -58,6 +60,16 @@ describe('Application', () => {
 		});
 	});
 
+	afterEach(async () => {
+		if (application) {
+			try {
+				await application.stop();
+			} catch (error) {
+				// Suppress cleanup errors in tests
+			}
+		}
+	});
+
 	describe('constructor', () => {
 		it('should create an Application instance', () => {
 			expect(application).to.be.instanceOf(Application);
@@ -72,16 +84,22 @@ describe('Application', () => {
 			expect(mockSyncScheduler.start.calledOnce).to.be.true;
 		});
 
-		it('should handle initialization errors', async () => {
+		it('should remain in setup mode when initialization fails', async () => {
 			const error = new Error('PhotoSyncService initialization failed');
 			mockPhotoSyncService.initialize.rejects(error);
 
-			try {
-				await application.start();
-				expect.fail('Should have thrown an error');
-			} catch (err) {
-				expect(err).to.equal(error);
-			}
+			await application.start();
+
+			expect(mockPhotoSyncService.initialize.calledOnce).to.be.true;
+			expect(mockSyncScheduler.start.called).to.be.false;
+		});
+
+		it('should remain in setup mode when service not ready', async () => {
+			mockPhotoSyncService.isReady.returns(false);
+
+			await application.start();
+
+			expect(mockSyncScheduler.start.called).to.be.false;
 		});
 
 		it('should handle scheduler errors', async () => {

@@ -1,5 +1,9 @@
 import type { Logger } from 'pino';
-import { FrameManager } from '../../src/services/FrameManager.js';
+import {
+  FrameManager,
+  type FrameConnectionProbeResult,
+  type FrameHeartbeatSnapshot,
+} from '../../src/services/FrameManager.js';
 import '../helpers/setup.js';
 import { expect, sinon } from '../helpers/setup.js';
 
@@ -7,6 +11,12 @@ describe('FrameManager', () => {
   let frameManager: FrameManager;
   let mockLogger: sinon.SinonStubbedInstance<Logger>;
   let mockSamsungFrameClient: any;
+  const config = {
+    host: '192.168.1.100',
+    name: 'TestTV',
+    services: ['art-mode', 'device'],
+    verbosity: 1,
+  };
 
   beforeEach(() => {
     mockLogger = {
@@ -24,24 +34,18 @@ describe('FrameManager', () => {
       connect: sinon.stub(),
       inArtMode: sinon.stub(),
       getArtModeInfo: sinon.stub(),
-      getAvailableArt: sinon.stub(),
       upload: sinon.stub(),
       close: sinon.stub(),
     };
 
-    // Mock SamsungFrameClient constructor
-    const SamsungFrameClientMock = sinon.stub().returns(mockSamsungFrameClient);
-
-    const config = {
-      host: '192.168.1.100',
-      name: 'TestTV',
-      services: ['art-mode', 'device'],
-      verbosity: 1,
-    };
-
-    frameManager = new FrameManager(config, mockLogger as any);
-    // Replace the client with our mock
-    frameManager['client'] = mockSamsungFrameClient;
+    frameManager = new FrameManager(
+      config as any,
+      mockLogger as any,
+      {
+        autoStartHeartbeat: false,
+        clientFactory: () => mockSamsungFrameClient,
+      },
+    );
   });
 
   describe('constructor', () => {
@@ -60,8 +64,6 @@ describe('FrameManager', () => {
       mockSamsungFrameClient.connect.resolves();
       mockSamsungFrameClient.inArtMode.resolves(true);
       mockSamsungFrameClient.getArtModeInfo.resolves(artModeInfo);
-      mockSamsungFrameClient.getAvailableArt.resolves();
-
       await frameManager.initialize();
 
       expect(mockSamsungFrameClient.getDeviceInfo.calledOnce).to.be.true;
@@ -70,34 +72,75 @@ describe('FrameManager', () => {
       expect(mockSamsungFrameClient.connect.calledOnce).to.be.true;
       expect(mockSamsungFrameClient.inArtMode.calledOnce).to.be.true;
       expect(mockSamsungFrameClient.getArtModeInfo.calledOnce).to.be.true;
-      expect(mockSamsungFrameClient.getAvailableArt.calledOnce).to.be.true;
 
       expect(
-        mockLogger.info.calledWith(
-          `Device Info: ${JSON.stringify(deviceInfo, null, 2)}`,
-        ),
+        mockLogger.info.calledWithMatch({ host: config.host }, 'Initializing frame manager'),
       ).to.be.true;
-      expect(mockLogger.info.calledWith('Is On: true')).to.be.true;
-      expect(mockLogger.info.calledWith('In Art Mode: true')).to.be.true;
     });
 
     it('should turn on device when it is off', async () => {
+      mockSamsungFrameClient.getDeviceInfo.rejects(new Error('offline'));
+
+      const result = await frameManager.ensureReachable();
+
+      expect(result.success).to.be.false;
+      expect(mockSamsungFrameClient.togglePower.called).to.be.false;
+    });
+  });
+
+  describe('ensureReachable', () => {
+    it('returns success payload when frame responds', async () => {
       const deviceInfo = { model: 'Samsung Frame', version: '1.0' };
+      const artModeInfo = { currentArt: 'art1' };
 
       mockSamsungFrameClient.getDeviceInfo.resolves(deviceInfo);
-      mockSamsungFrameClient.isOn.resolves(false);
-      mockSamsungFrameClient.togglePower.resolves();
-      mockSamsungFrameClient.connect.resolves();
+      mockSamsungFrameClient.isOn.resolves(true);
       mockSamsungFrameClient.inArtMode.resolves(false);
+      mockSamsungFrameClient.getArtModeInfo.resolves(artModeInfo);
+
+      const result = await frameManager.ensureReachable();
+
+      expect(result.success).to.be.true;
+      expect(result.deviceInfo).to.equal(deviceInfo);
+      expect(result.artModeInfo).to.equal(artModeInfo);
+      expect(result.isOn).to.be.true;
+      expect(result.inArtMode).to.be.false;
+
+      const snapshot = frameManager.getHeartbeatSnapshot() as FrameHeartbeatSnapshot;
+      expect(snapshot).to.not.be.null;
+      expect(snapshot.isReachable).to.be.true;
+      expect(snapshot.isOn).to.be.true;
+    });
+
+    it('captures error details when frame is unreachable', async () => {
+      const error = new Error('timeout');
+      mockSamsungFrameClient.getDeviceInfo.rejects(error);
+
+      const result = await frameManager.ensureReachable();
+
+      expect(result.success).to.be.false;
+      expect(result.error).to.equal('timeout');
+      expect(mockLogger.warn.called).to.be.true;
+
+      const snapshot = frameManager.getHeartbeatSnapshot() as FrameHeartbeatSnapshot;
+      expect(snapshot).to.not.be.null;
+      expect(snapshot.isReachable).to.be.false;
+      expect(snapshot.error).to.equal('timeout');
+    });
+  });
+
+  describe('heartbeat', () => {
+    it('reuses ensureReachable results', async () => {
+      mockSamsungFrameClient.getDeviceInfo.resolves({});
+      mockSamsungFrameClient.isOn.resolves(true);
+      mockSamsungFrameClient.inArtMode.resolves(true);
       mockSamsungFrameClient.getArtModeInfo.resolves({});
-      mockSamsungFrameClient.getAvailableArt.resolves();
 
-      await frameManager.initialize();
+      await frameManager.ensureReachable();
+      const snapshot = await frameManager.heartbeat();
 
-      expect(mockSamsungFrameClient.togglePower.calledOnce).to.be.true;
-      expect(mockLogger.info.calledWith('Device is off, turning it on...')).to
-        .be.true;
-      expect(mockLogger.info.calledWith('Device is on')).to.be.true;
+      expect(snapshot.lastCheckedAt).to.be.a('number');
+      expect(mockSamsungFrameClient.getDeviceInfo.callCount).to.equal(2);
     });
   });
 

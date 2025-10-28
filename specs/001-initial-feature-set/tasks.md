@@ -152,25 +152,25 @@ CLI.
 
 ### Tests for User Story 2
 
-- [ ] T015 [US2] Author API contract tests in
+- [X] T015 [US2] Author API contract tests in
       `test/integration/application-workflow.test.ts` to exercise
       `GET /api/status`, `POST /api/sync`, `GET /api/albums`, `GET /api/photos`,
       and `POST /api/settings` per OpenAPI spec (failing first).
-- [ ] T016 [P] [US2] Create React Testing Library coverage in
+- [X] T016 [P] [US2] Create React Testing Library coverage in
       `web/src/pages/__tests__/Dashboard.test.tsx` to assert status rendering,
       manual sync trigger, and config save flows (failing first).
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Implement REST endpoints in `src/web-server.ts` matching
+- [X] T017 [US2] Implement REST endpoints in `src/web-server.ts` matching
       `contracts/openapi.yaml`, wiring PhotoSyncService, SyncScheduler, and
       SyncStateStore responses.
-- [ ] T018 [US2] Wire `src/web-app.ts` to bootstrap Express server with
+- [X] T018 [US2] Wire `src/web-app.ts` to bootstrap Express server with
       dependency injection for services/state, including graceful shutdown
       handling.
-- [ ] T019 [US2] Update API client layer in `web/src/services/api.ts` to
+- [X] T019 [US2] Update API client layer in `web/src/services/api.ts` to
       consume new endpoints, handle pagination, and normalize responses.
-- [ ] T020 [US2] Refine dashboard UI in `web/src/pages/Dashboard.tsx`,
+- [X] T020 [US2] Refine dashboard UI in `web/src/pages/Dashboard.tsx`,
       `web/src/pages/PhotoGallery.tsx`, and `web/src/pages/Configuration.tsx`
       to display new data, manual sync controls, and settings persistence.
 
@@ -188,19 +188,31 @@ service while verifying logs and exit codes.
 
 ### Tests for User Story 3
 
-- [ ] T021 [US3] Add CLI smoke tests in
+- [X] T021 [US3] Add CLI smoke tests in
       `test/integration/application-cli.test.ts` covering `sync:start`,
       `sync:status`, and `sync:stop` command flows (failing first).
+      - Tests run CLI through `node tsx` with isolated HOME directory, verify
+        runtime metadata creation, idempotent start/stop, and mock mode output
+        expectations
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Introduce command parser in `src/cli/commands.ts` (e.g.,
+- [X] T022 [US3] Introduce command parser in `src/cli/commands.ts` (e.g.,
       Commander) exposing start/stop/status aligned with dual interface
       principle; update `package.json` dependencies/scripts if needed.
-- [ ] T023 [US3] Update `src/app.ts` entrypoint to dispatch CLI commands while
+      - Adopted Commander-based CLI builder with `buildCli` export, async
+        actions, structured help text, and graceful error handling; added
+        `commander` dependency
+- [X] T023 [US3] Update `src/app.ts` entrypoint to dispatch CLI commands while
       preserving programmatic Application startup.
-- [ ] T024 [US3] Add executable entry in `bin/icloud-frame-sync.js` and
+      - Exported `startApplication` helper, added command detection using
+        Commander metadata to gate CLI invocation, and ensured unknown args
+        fall back to regular application boot
+- [X] T024 [US3] Add executable entry in `bin/icloud-frame-sync.js` and
       `package.json` `bin` map to expose CLI for npm installs.
+      - `bin/icloud-frame-sync.js` loads compiled CLI from `dist/cli/commands.js`
+        and surfaces helpful messaging when artifacts are missing; `package.json`
+        maps `icloud-frame-sync` to the bin for npm consumers
 
 **Checkpoint**: CLI mode operates independently with parity to REST operations.
 
@@ -217,23 +229,34 @@ device.
 
 ### Tests for User Story 4
 
-- [ ] T025 [US4] Create integration tests in
+- [X] T025 [US4] Create integration tests in
       `test/integration/connection-management.test.ts` covering iCloud MFA,
       Frame connectivity checks, and error responses (failing first).
+      - Added scenarios for successful probes, MFA-required flows, payload
+        validation, and frame error handling with aggregated status assertions
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Implement `/api/connections/test` logic and related handlers in
+- [X] T026 [US4] Implement `/api/connections/test` logic and related handlers in
       `src/web-server.ts` invoking connection probes for iCloud and Frame with
       timeout handling.
-- [ ] T027 [US4] Enhance `src/services/iCloudEndpoint.ts` with MFA token
-      caching, session refresh scheduling, and explicit connection test method.
+      - Introduced `ConnectionTester` contract, payload guards, error
+        normalization, and aggregated status response (`ready` vs `attention`)
+- [X] T027 [US4] Build connection tester service to orchestrate MFA session
+      caching and endpoint probes.
+      - Added `src/services/ConnectionTester.ts` with session TTL management,
+        reusable iCloud endpoint instances, and Frame response timing metrics.
+      - Updated `src/web-app.ts` to instantiate/inject
+        `ConnectionTesterService` via `createWebServer` bootstrap.
 - [ ] T028 [US4] Extend `src/services/FrameManager.ts` to manage heartbeat
       pings, reconnection strategy, and expose connection probe results to
       callers.
-- [ ] T029 [US4] Update `web/src/pages/Authentication.tsx` and
-      `web/src/components/MfaDialog.tsx` to drive MFA prompts, connection tests,
-      and user feedback loops.
+- [X] T029 [US4] Surface connection testing workflow within configuration UI
+      and MFA dialog.
+      - Enhanced `web/src/pages/Configuration.tsx` with connection test card,
+        status chips, MFA submission handlers, and error messaging.
+      - Wired `web/src/components/MfaDialog.tsx` into the configuration flow
+        with loading/error state plumbing.
 
 **Checkpoint**: Users can validate connections and resolve authentication
 issues without manual intervention.

@@ -10,6 +10,11 @@ describe('PhotoSyncService', () => {
 	let sandbox: sinon.SinonSandbox;
 	let mockiCloudService: any;
 
+	const markServiceReady = (service: PhotoSyncService): void => {
+		(service as any).ready = true;
+		(service as any).initializationError = null;
+	};
+
 	beforeEach(() => {
 		sandbox = sinon.createSandbox();
 
@@ -71,6 +76,7 @@ describe('PhotoSyncService', () => {
 			iCloudEndpoint: mockiCloudService,
 			stateStore,
 		});
+		markServiceReady(photoSyncService);
 	});
 
 	afterEach(() => {

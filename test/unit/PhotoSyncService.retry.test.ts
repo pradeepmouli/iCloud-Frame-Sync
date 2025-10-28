@@ -23,6 +23,11 @@ describe('PhotoSyncService (T012 - Retry Logic)', () => {
 	let mockFrameEndpoint: any;
 	let photoSyncService: PhotoSyncService;
 
+	const markServiceReady = (service: PhotoSyncService): void => {
+		(service as any).ready = true;
+		(service as any).initializationError = null;
+	};
+
 	function createMockiCloudPhoto(id: string, filename: string): iCloudPhoto {
 		return {
 			id,
@@ -79,6 +84,7 @@ describe('PhotoSyncService (T012 - Retry Logic)', () => {
 			iCloudEndpoint: mockiCloudEndpoint as any,
 			stateStore: mockStateStore as any,
 		});
+		markServiceReady(photoSyncService);
 	});
 
 	afterEach(() => {
@@ -163,6 +169,7 @@ describe('PhotoSyncService (T012 - Retry Logic)', () => {
 			iCloudEndpoint: mockiCloudEndpoint as any,
 			stateStore: mockStateStore as any,
 		});
+		markServiceReady(photoSyncService);
 
 		const photo = createMockiCloudPhoto('photo-3', 'test3.jpg');
 		mockiCloudEndpoint.listPhotos.resolves([photo]);
