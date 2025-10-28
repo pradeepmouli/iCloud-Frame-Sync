@@ -304,9 +304,6 @@ across stories.
 
 **Checkpoint**: Documentation, logging, and CI workflows are production-ready.
 **✅ Phase 7 Polish & Cross-Cutting Concerns Complete: All tasks completed.**
-      - Coverage job: runs on PRs to generate and upload coverage reports
-      - All jobs use Node.js 20 with npm caching for performance
-      - Triggers on push to main/master/develop and all pull requests
 
 ---
 
