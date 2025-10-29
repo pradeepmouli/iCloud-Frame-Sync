@@ -24,8 +24,8 @@ interface PendingICloudSession {
 
 export interface ConnectionTesterOptions {
 	logger: Logger;
-	createICloudEndpoint?: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
-	createFrameEndpoint?: (config: FrameConfig, logger: Logger) => FrameEndpoint;
+	createICloudEndpoint?: (_config: iCloudConfig, _logger: Logger) => iCloudEndpoint;
+	createFrameEndpoint?: (_config: FrameConfig, _logger: Logger) => FrameEndpoint;
 	defaultAlbum?: string;
 	dataDirectory?: string;
 	sessionTtlMs?: number;
@@ -40,12 +40,12 @@ class MfaRequiredError extends Error {
 	}
 }
 
-function resolveErrorMessage(error: unknown): string {
-	if (error instanceof Error && typeof error.message === 'string') {
-		return error.message;
+function resolveErrorMessage(_error: unknown): string {
+	if (_error instanceof Error && typeof _error.message === 'string') {
+		return _error.message;
 	}
-	if (typeof error === 'string' && error.trim().length > 0) {
-		return error.trim();
+	if (typeof _error === 'string' && _error.trim().length > 0) {
+		return _error.trim();
 	}
 	return 'An unexpected error occurred while testing the connection.';
 }
@@ -71,10 +71,10 @@ export class ConnectionTesterService implements ConnectionTester {
 		this.logger = options.logger;
 		this.createICloudEndpoint =
 			options.createICloudEndpoint ??
-			((config: iCloudConfig, logger: Logger) => new iCloudEndpoint(config, logger));
+			((_config: iCloudConfig, _logger: Logger) => new iCloudEndpoint(_config, _logger));
 		this.createFrameEndpoint =
 			options.createFrameEndpoint ??
-			((config: FrameConfig, logger: Logger) => new FrameEndpoint(config, logger));
+			((_config: FrameConfig, _logger: Logger) => new FrameEndpoint(_config, _logger));
 		this.defaultAlbum = options.defaultAlbum ?? DEFAULT_ICLOUD_ALBUM;
 		this.dataDirectory = options.dataDirectory ?? path.resolve('data', 'connection-tests');
 		this.sessionTtlMs = Math.max(1000, options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS);

@@ -81,6 +81,7 @@ async function readFileAsBase64(file: File): Promise<string> {
 export default function FrameManager() {
   const [status, setStatus] = useState<FrameStatusSnapshot | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [configuredHost, setConfiguredHost] = useState<string | null>(null);
   const [artPage, setArtPage] = useState<FrameArtPage | null>(null);
   const [artError, setArtError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -95,6 +96,11 @@ export default function FrameManager() {
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     try {
+      // Always refresh configured host alongside live status to reflect recent saves
+      const appStatus = await api.getStatus();
+      const hostFromConfig = appStatus.config?.frameHost ?? null;
+      setConfiguredHost(hostFromConfig);
+
       const snapshot = await api.getFrameStatus();
       setStatus(snapshot);
       setStatusError(null);
@@ -301,6 +307,11 @@ export default function FrameManager() {
                     />
                   </Stack>
                   <Typography variant="body2">Host: {status.host}</Typography>
+                  {configuredHost && configuredHost !== status.host && (
+                    <Typography variant="caption" color="text.secondary">
+                      Configured host: {configuredHost}
+                    </Typography>
+                  )}
                   <Typography variant="body2">
                     Last Checked: {formatDate(status.lastCheckedAt)}
                   </Typography>
@@ -346,6 +357,11 @@ export default function FrameManager() {
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   Unable to retrieve frame status. Verify the host information and retry.
+                  {configuredHost && (
+                    <>
+                      {' '}Configured host: {configuredHost}
+                    </>
+                  )}
                 </Typography>
               )}
             </CardContent>

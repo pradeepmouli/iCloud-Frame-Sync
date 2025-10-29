@@ -72,6 +72,25 @@ export class FrameEndpoint implements Endpoint {
 	config: SamsungFrameClientOptions<any>;
 	private _photos: FramePhoto[] = [];
 
+	private async withClient<T>(op: () => Promise<T>): Promise<T> {
+		try {
+			return await op();
+		} catch (error) {
+			const details = this.extractErrorDetails(error);
+			// Attempt a one-time reconnect on common connection errors and retry
+			if (typeof details.message === 'string' && (details.message.includes('send') || details.message.includes('not connected') || details.message.includes('closed'))) {
+				this.logger.warn({ error: details.message }, 'Frame client not connected, attempting reconnect...');
+				try {
+					await this.client.connect();
+					return await op();
+				} catch (reconnectError) {
+					this.logger.error({ error: this.extractErrorDetails(reconnectError).message }, 'Reconnect attempt failed');
+				}
+			}
+			throw error;
+		}
+	}
+
 	constructor (config: FrameConfig, logger: Logger) {
 		this.logger = logger;
 		this.client = new SamsungFrameClient({
@@ -89,7 +108,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async getDeviceInfo(): Promise<Record<string, unknown>> {
 		try {
-			return await this.client.getDeviceInfo();
+			return await this.withClient(() => this.client.getDeviceInfo());
 		} catch (error) {
 			this.logger.error({ error }, 'Failed to retrieve frame device info');
 			throw error;
@@ -98,7 +117,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async isOn(): Promise<boolean> {
 		try {
-			return await this.client.isOn();
+			return await this.withClient(() => this.client.isOn());
 		} catch (error) {
 			this.logger.error({ error }, 'Failed to determine frame power state');
 			throw error;
@@ -107,8 +126,8 @@ export class FrameEndpoint implements Endpoint {
 
 	async togglePower(): Promise<boolean> {
 		try {
-			await this.client.togglePower();
-			return await this.client.isOn();
+			await this.withClient(() => this.client.togglePower());
+			return await this.withClient(() => this.client.isOn());
 		} catch (error) {
 			this.logger.error({ error }, 'Failed to toggle frame power');
 			throw error;
@@ -117,11 +136,11 @@ export class FrameEndpoint implements Endpoint {
 
 	async powerOn(): Promise<boolean> {
 		try {
-			if (await this.client.isOn()) {
+			if (await this.withClient(() => this.client.isOn())) {
 				return true;
 			}
-			await this.client.togglePower();
-			return await this.client.isOn();
+			await this.withClient(() => this.client.togglePower());
+			return await this.withClient(() => this.client.isOn());
 		} catch (error) {
 			this.logger.error({ error }, 'Failed to power on frame');
 			throw error;
@@ -130,11 +149,11 @@ export class FrameEndpoint implements Endpoint {
 
 	async powerOff(): Promise<boolean> {
 		try {
-			if (!(await this.client.isOn())) {
+			if (!(await this.withClient(() => this.client.isOn()))) {
 				return true;
 			}
-			await this.client.togglePower();
-			return !(await this.client.isOn());
+			await this.withClient(() => this.client.togglePower());
+			return !(await this.withClient(() => this.client.isOn()));
 		} catch (error) {
 			this.logger.error({ error }, 'Failed to power off frame');
 			throw error;
@@ -191,12 +210,21 @@ export class FrameEndpoint implements Endpoint {
 	}
 
 	async initialize(): Promise<void> {
-		if (!this.initialized) {
-			this.logger.info('Initializing Samsung Frame Endpoint...');
-			this.logger.info(`Connecting to Samsung Frame at ${this.config.host}...`);
-			const deviceInfo = await this.client.getDeviceInfo();
-			this.logger.info(`Device Info: ${JSON.stringify(deviceInfo, null, 2)}`);
+		if (this.initialized) return;
+
+		this.logger.info('Initializing Samsung Frame Endpoint...');
+		this.logger.info(`Connecting to Samsung Frame at ${this.config.host}...`);
+		try {
 			await this.client.connect();
+			this.initialized = true;
+			// Best-effort device info after connection
+			try {
+				const deviceInfo = await this.client.getDeviceInfo();
+				this.logger.info(`Device Info: ${JSON.stringify(deviceInfo, null, 2)}`);
+			} catch (infoError) {
+				this.logger.warn({ error: this.extractErrorDetails(infoError).message }, 'Failed to retrieve device info during initialization');
+			}
+			// Try to prime art mode and available art information
 			try {
 				const artModeInfo = await this.client.getArtModeInfo();
 				this.logger.info(
@@ -208,14 +236,19 @@ export class FrameEndpoint implements Endpoint {
 				);
 				// TODO: Populate this._photos from Frame if possible
 				this._photos = [];
-				this.initialized = true;
 			} catch (error) {
 				const errorDetails = this.extractErrorDetails(error);
-				this.logger.error(
-					`Error initializing Samsung Frame Endpoint: ${errorDetails.message}`,
+				this.logger.warn(
+					`Frame connected but priming calls failed: ${errorDetails.message}`,
 				);
-				this.logger.error(`Initialization error details: ${errorDetails.details}`);
 			}
+		} catch (connectError) {
+			const errorDetails = this.extractErrorDetails(connectError);
+			this.logger.error(
+				`Error initializing Samsung Frame Endpoint (connect): ${errorDetails.message}`,
+			);
+			this.logger.error(`Initialization error details: ${errorDetails.details}`);
+			throw connectError;
 		}
 	}
 
@@ -234,7 +267,7 @@ export class FrameEndpoint implements Endpoint {
 	}
 
 	getAvailableArt() {
-		return this.client.getAvailableArt().then((art) => {
+		return this.withClient(() => this.client.getAvailableArt()).then((art) => {
 			this._photos = art.map((a) => new FramePhoto(a, this.client));
 			return this._photos;
 		});
@@ -270,7 +303,7 @@ export class FrameEndpoint implements Endpoint {
 			this.logger.debug(`Requesting thumbnail for photo ID: ${photoId}`);
 
 			// First, try to check if the art exists in the available art list
-			const availableArt = await this.client.getAvailableArt();
+			const availableArt = await this.withClient(() => this.client.getAvailableArt());
 			const artExists = availableArt.some((art) => art.id === photoId);
 
 			if (!artExists) {
@@ -286,7 +319,7 @@ export class FrameEndpoint implements Endpoint {
 				try {
 					this.logger.debug(`Thumbnail attempt ${attempt + 1}/${maxRetries} for ${photoId}`);
 
-					const response = await this.client.request({
+					const response = await this.withClient(() => this.client.request({
 						request: 'get_thumbnail',
 						content_id: photoId,
 						conn_info: {
@@ -294,7 +327,7 @@ export class FrameEndpoint implements Endpoint {
 							connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
 							id: this.generateUUID(),
 						},
-					});
+					}));
 
 					this.logger.debug(
 						`Got response for thumbnail request: ${JSON.stringify(response)}`,
@@ -364,7 +397,7 @@ export class FrameEndpoint implements Endpoint {
 	async getThumbnailList(photoIds: string[]): Promise<Buffer[]> {
 		try {
 			const contentIdList = photoIds.map((id) => ({ content_id: id }));
-			const response = await this.client.request({
+			const response = await this.withClient(() => this.client.request({
 				request: 'get_thumbnail_list',
 				content_id_list: contentIdList,
 				conn_info: {
@@ -372,7 +405,7 @@ export class FrameEndpoint implements Endpoint {
 					connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
 					id: this.generateUUID(),
 				},
-			});
+			}));
 
 			const connInfo = JSON.parse(response.conn_info);
 			const thumbnails = await this.readThumbnailList(connInfo);
@@ -674,7 +707,7 @@ export class FrameEndpoint implements Endpoint {
 			onProgress(50); // Upload starting
 		}
 
-		const uploadPromise = this.client.upload(Buffer.from(buffer), { fileType });
+		const uploadPromise = this.withClient(() => this.client.upload(Buffer.from(buffer), { fileType }));
 
 		// Simulate progress during upload (since we can't hook into actual stream)
 		const progressInterval = setInterval(() => {
@@ -714,6 +747,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async close(): Promise<void> {
 		await this.client?.close();
+		this.initialized = false;
 	}
 
 	get photos(): Promise<Photo[]> {

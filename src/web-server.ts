@@ -175,6 +175,20 @@ function extractSettingsUpdate(
 		update.corsOrigin = payload.corsOrigin;
 	}
 
+	// Pass through iCloud credentials when present (password optional to allow "leave blank to keep existing")
+	if (typeof payload.iCloudUsername === 'string') {
+		const candidate = payload.iCloudUsername.trim();
+		if (candidate.length > 0) {
+			update.iCloudUsername = candidate;
+		}
+	}
+	if (typeof payload.iCloudPassword === 'string') {
+		const candidate = payload.iCloudPassword;
+		if (candidate.trim().length > 0) {
+			update.iCloudPassword = candidate;
+		}
+	}
+
 	return update;
 }
 
@@ -278,6 +292,40 @@ export async function createWebServer(
 	}
 
 	app.use(express.json({ limit: '15mb' }));
+
+	// Lightweight HTTP request/response logging with redaction
+	app.use((req, res, next) => {
+		const start = Date.now();
+		const requestId = crypto.randomUUID();
+		const redact = (value: unknown): unknown => {
+			if (!value || typeof value !== 'object') return value;
+			const src = value as Record<string, unknown>;
+			const out: Record<string, unknown> = {};
+			for (const [k, v] of Object.entries(src)) {
+				const key = k.toLowerCase();
+				if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
+					out[k] = '[REDACTED]';
+				} else if (key === 'data' && typeof v === 'string') {
+					out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
+				} else if (typeof v === 'object' && v !== null) {
+					out[k] = redact(v);
+				} else {
+					out[k] = v;
+				}
+			}
+			return out;
+		};
+
+		const safeBody = redact(req.body);
+		logger.info({ requestId, method: req.method, url: req.originalUrl, body: safeBody }, 'HTTP request');
+
+		res.on('finish', () => {
+			const durationMs = Date.now() - start;
+			logger.info({ requestId, statusCode: res.statusCode, durationMs }, 'HTTP response');
+		});
+
+		next();
+	});
 
 	const pendingAuthSessions = new Map<string, PendingAuthSession>();
 	const SESSION_TTL_MS = 5 * 60 * 1000;

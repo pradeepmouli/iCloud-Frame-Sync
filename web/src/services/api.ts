@@ -52,6 +52,32 @@ class ApiService {
 	private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
 		const { parseJson = true, headers, body, method = 'GET', ...rest } = options;
 
+		const redact = (value: unknown): unknown => {
+			if (!value || typeof value !== 'object') return value;
+			const out: Record<string, unknown> = {};
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+				const key = k.toLowerCase();
+				if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
+					out[k] = '[REDACTED]';
+				} else if (key === 'data' && typeof v === 'string') {
+					out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
+				} else if (typeof v === 'object' && v !== null) {
+					out[k] = redact(v);
+				} else {
+					out[k] = v;
+				}
+			}
+			return out;
+		};
+
+		try {
+			const safe = typeof body === 'string' ? JSON.parse(body) : body;
+			// eslint-disable-next-line no-console
+			console.debug('[api] request', { method, endpoint, body: redact(safe as unknown) });
+		} catch {
+			// ignore
+		}
+
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			method,
 			body,
@@ -67,14 +93,21 @@ class ApiService {
 				? await parseJsonResponse<{ error?: string; }>(response).catch(() => ({}))
 				: {};
 			const errorMessage = errorPayload.error ?? `Request to ${endpoint} failed with status ${response.status}`;
+			// eslint-disable-next-line no-console
+			console.debug('[api] response', { endpoint, status: response.status, error: errorPayload.error });
 			throw new Error(errorMessage);
 		}
 
 		if (!parseJson || response.status === 204) {
+			// eslint-disable-next-line no-console
+			console.debug('[api] response', { endpoint, status: response.status, body: null });
 			return {} as T;
 		}
 
-		return parseJsonResponse<T>(response);
+		const parsed = await parseJsonResponse<T>(response);
+		// eslint-disable-next-line no-console
+		console.debug('[api] response', { endpoint, status: response.status, body: redact(parsed as unknown) });
+		return parsed;
 	}
 
 	private buildQuery(params: Record<string, string | number | undefined>): string {
