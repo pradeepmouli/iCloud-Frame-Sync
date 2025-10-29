@@ -78,13 +78,19 @@ export class FrameEndpoint implements Endpoint {
 		} catch (error) {
 			const details = this.extractErrorDetails(error);
 			// Attempt a one-time reconnect on common connection errors and retry
-			if (typeof details.message === 'string' && (details.message.includes('send') || details.message.includes('not connected') || details.message.includes('closed'))) {
+			// But skip if already connecting to avoid "WebSocket is not open: readyState 0" errors
+			if (typeof details.message === 'string' &&
+				(details.message.includes('send') ||
+					details.message.includes('not connected') ||
+					details.message.includes('closed')) &&
+				!details.message.includes('readyState 0')) {
 				this.logger.warn({ error: details.message }, 'Frame client not connected, attempting reconnect...');
 				try {
 					await this.client.connect();
 					return await op();
 				} catch (reconnectError) {
 					this.logger.error({ error: this.extractErrorDetails(reconnectError).message }, 'Reconnect attempt failed');
+					throw reconnectError;
 				}
 			}
 			throw error;
@@ -226,11 +232,11 @@ export class FrameEndpoint implements Endpoint {
 			}
 			// Try to prime art mode and available art information
 			try {
-				const artModeInfo = await this.client.getArtModeInfo();
+				const artModeInfo = await this.withClient(() => this.client.getArtModeInfo());
 				this.logger.info(
 					`Art Mode Info: ${JSON.stringify(artModeInfo, null, 2)}`,
 				);
-				const availableArt = await this.client.getAvailableArt();
+				const availableArt = await this.withClient(() => this.client.getAvailableArt());
 				this.logger.info(
 					`Available Art: ${JSON.stringify(availableArt, null, 2)}`,
 				);
@@ -758,7 +764,7 @@ export class FrameEndpoint implements Endpoint {
 	// Additional art management methods
 	async getCurrentArt(): Promise<ArtContentItem | null> {
 		try {
-			return await this.client.getCurrentArt();
+			return await this.withClient(() => this.client.getCurrentArt());
 		} catch (error) {
 			this.logger.error(`Failed to get current art: ${error.message}`);
 			return null;
@@ -787,7 +793,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async getBrightness(): Promise<number> {
 		try {
-			return await this.client.getBrightness();
+			return await this.withClient(() => this.client.getBrightness());
 		} catch (error) {
 			this.logger.error(`Failed to get brightness: ${error.message}`);
 			return 0;
@@ -806,7 +812,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async inArtMode(): Promise<boolean> {
 		try {
-			return await this.client.inArtMode();
+			return await this.withClient(() => this.client.inArtMode());
 		} catch (error) {
 			this.logger.error(`Failed to check art mode: ${error.message}`);
 			return false;

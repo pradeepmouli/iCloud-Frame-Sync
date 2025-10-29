@@ -17,8 +17,11 @@ process.on('unhandledRejection', (reason) => {
 		bootstrapLogger.warn({ error: reason.message }, 'Suppressed iCloud authentication rejection while in setup mode');
 		return;
 	}
-	bootstrapLogger.error({ reason }, 'Unhandled promise rejection');
-	process.exit(1);
+	// Log but don't exit - allows server to continue in setup mode
+	const errorDetails = reason instanceof Error
+		? { message: reason.message, stack: reason.stack, name: reason.name }
+		: { raw: reason };
+	bootstrapLogger.warn({ reason: errorDetails }, 'Unhandled promise rejection (non-fatal in setup mode)');
 });
 
 process.on('uncaughtException', (error) => {

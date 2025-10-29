@@ -159,10 +159,18 @@ export class PhotoSyncService {
 		this.currentSettings = this.buildSettingsSnapshot();
 	}
 
-	private rebuildEndpointsIfNeeded(): void {
+	private async rebuildEndpointsIfNeeded(): Promise<void> {
 		if (!this.useFrameOverride) {
 			const desiredHost = this.config.frame?.host ?? '';
 			if (desiredHost !== this.frameEndpointHost) {
+				// Close old endpoint before creating new one
+				if (this.frameEndpoint) {
+					try {
+						await this.frameEndpoint.close();
+					} catch (error) {
+						this.logger.warn({ error }, 'Failed to close old frame endpoint');
+					}
+				}
 				const frameConfig: FrameConfig = {
 					...this.config.frame,
 					services: (this.config.frame?.services || []).map(String),
@@ -206,7 +214,7 @@ export class PhotoSyncService {
 			this.stateStoreInitialized = true;
 		}
 
-		this.rebuildEndpointsIfNeeded();
+		await this.rebuildEndpointsIfNeeded();
 
 		const missing = this.getMissingConfigFields();
 		if (missing.length > 0) {
