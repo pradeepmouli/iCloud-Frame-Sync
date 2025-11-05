@@ -3,14 +3,14 @@ import type { Logger } from 'pino';
 import type { ArtContentItem } from 'samsung-frame-connect';
 
 import type {
-	FrameArtListQuery,
-	FrameArtPage,
-	FrameArtSummary,
-	FrameArtUploadRequest,
-	FrameArtUploadResult,
-	FramePowerAction,
-	FramePowerStateResponse,
-	FrameStatusSnapshot,
+    FrameArtListQuery,
+    FrameArtPage,
+    FrameArtSummary,
+    FrameArtUploadRequest,
+    FrameArtUploadResult,
+    FramePowerAction,
+    FramePowerStateResponse,
+    FrameStatusSnapshot,
 } from './dashboardTypes.js';
 import { FrameEndpoint } from './FrameEndpoint.js';
 import { SyncStateStore } from './SyncStateStore.js';
