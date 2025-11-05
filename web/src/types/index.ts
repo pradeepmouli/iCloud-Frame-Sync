@@ -62,6 +62,7 @@ export interface FrameArtSummary {
 		color?: string;
 	} | null;
 	addedAt?: string | null;
+	thumbnail?: string | null;
 }
 
 export type FrameArt = FrameArtSummary;

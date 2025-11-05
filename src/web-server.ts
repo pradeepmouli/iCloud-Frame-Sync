@@ -525,15 +525,6 @@ export async function createWebServer(
 	});
 
 	app.get('/api/frame/status', async (_req: Request, res: Response) => {
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame dashboard unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
-			return;
-		}
 		try {
 			const snapshot = await frameDashboardService.getStatusSnapshot();
 			res.json(snapshot satisfies FrameStatusSnapshot);
@@ -554,16 +545,6 @@ export async function createWebServer(
 			return;
 		}
 
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame power controls unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
-			return;
-		}
-
 		try {
 			const responsePayload = await frameDashboardService.setPowerState(action);
 			res.json(responsePayload satisfies FramePowerStateResponse);
@@ -580,16 +561,6 @@ export async function createWebServer(
 			typeof req.query.categoryId === 'string'
 				? req.query.categoryId
 				: undefined;
-
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame art listing unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
-			return;
-		}
 
 		try {
 			const artPage = await frameDashboardService.listArt({
@@ -609,16 +580,6 @@ export async function createWebServer(
 		const data = typeof payload?.data === 'string' ? payload.data : '';
 		if (data.trim().length === 0) {
 			res.status(400).json({ error: 'data (base64) is required' });
-			return;
-		}
-
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame art upload unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
 			return;
 		}
 
@@ -647,23 +608,13 @@ export async function createWebServer(
 			return;
 		}
 
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame art deletion unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
-			return;
-		}
-
 		try {
-			const deleted = await frameDashboardService.deleteArt(artId);
-			if (deleted) {
-				res.status(204).send();
-				return;
+			const success = await frameDashboardService.deleteArt(artId);
+			if (success) {
+				res.sendStatus(204);
+			} else {
+				res.status(404).json({ error: 'Art not found or could not be deleted' });
 			}
-			res.status(404).json({ error: 'Art not found' });
 		} catch (error) {
 			logger.error({ error, artId }, 'Failed to delete frame art');
 			res.status(500).json({ error: 'Failed to delete frame art' });
@@ -674,16 +625,6 @@ export async function createWebServer(
 		const artId = req.params.artId?.trim();
 		if (!artId) {
 			res.status(400).json({ error: 'artId parameter is required' });
-			return;
-		}
-
-		if (!photoSyncService.isReady()) {
-			const snapshot = photoSyncService.getCurrentSettings();
-			res.status(503).json({
-				error: 'Frame art thumbnail unavailable until setup completes.',
-				missingFields: snapshot.missingFields,
-				lastError: snapshot.lastError,
-			});
 			return;
 		}
 

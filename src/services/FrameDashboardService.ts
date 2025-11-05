@@ -115,6 +115,8 @@ export class FrameDashboardService {
 		const startIndex = (page - 1) * pageSize;
 		const items = filtered.slice(startIndex, startIndex + pageSize);
 
+		// Don't fetch thumbnails here - they'll be loaded on-demand via separate endpoint
+		// This prevents the Frame's WebSocket API from timing out with too many parallel requests
 		return {
 			items,
 			pagination: { page, pageSize, total },

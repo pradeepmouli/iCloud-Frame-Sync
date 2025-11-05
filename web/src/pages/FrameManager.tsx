@@ -15,6 +15,7 @@ import {
     Card,
     CardActions,
     CardContent,
+    CardMedia,
     Checkbox,
     Chip,
     Divider,
@@ -496,6 +497,20 @@ export default function FrameManager() {
                               justifyContent: 'space-between',
                             }}
                           >
+                            <CardMedia
+                              component="img"
+                              height="180"
+                              image={`/api/frame/art/${art.id}/thumbnail`}
+                              alt={art.name}
+                              sx={{
+                                objectFit: 'cover',
+                                bgcolor: 'background.paper',
+                              }}
+                              onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                // Fallback to placeholder on error
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
                             <CardContent>
                               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                                 <ImageIcon color={isCurrent ? 'primary' : 'disabled'} />
