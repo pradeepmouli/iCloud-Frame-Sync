@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pino, type Logger } from 'pino';
 import {
-	SyncStateStore,
-	type AlbumState,
-	type PhotoState,
-	type SyncState,
+    SyncStateStore,
+    type AlbumState,
+    type PhotoState,
+    type SyncState,
 } from '../../src/services/SyncStateStore.js';
 
 /**

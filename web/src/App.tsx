@@ -1,14 +1,12 @@
+import { Box, CssBaseline, ThemeProvider } from '@mui/material';
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import { Box } from '@mui/material';
-import { liquidGlassTheme } from './theme/liquidGlassTheme';
+import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
 import Configuration from './pages/Configuration';
-import PhotoGallery from './pages/PhotoGallery';
+import Dashboard from './pages/Dashboard';
 import FrameManager from './pages/FrameManager';
-import Authentication from './pages/Authentication';
+import PhotoGallery from './pages/PhotoGallery';
+import { liquidGlassTheme } from './theme/liquidGlassTheme';
 
 function App() {
   return (
@@ -21,7 +19,6 @@ function App() {
             <Route path="/config" element={<Configuration />} />
             <Route path="/photos" element={<PhotoGallery />} />
             <Route path="/frame" element={<FrameManager />} />
-            <Route path="/auth" element={<Authentication />} />
           </Routes>
         </Layout>
       </Box>

@@ -11,6 +11,14 @@
 		"experimentalDecorators": true,
 		"typeRoots": [
 			"./src/types"
+		],
+		"strictNullChecks": true,
+		"noImplicitAny": true,
+		"noUncheckedIndexedAccess": true,
+		"forceConsistentCasingInFileNames": true,
+		"lib": [
+			"ESNext",
+			"DOM"
 		]
 	},
 	"include": [

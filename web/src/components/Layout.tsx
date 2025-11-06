@@ -1,25 +1,24 @@
+import {
+	CloudSync as CloudSyncIcon,
+	Dashboard as DashboardIcon,
+	PhotoLibrary as PhotoLibraryIcon,
+	Settings as SettingsIcon,
+	Tv as TvIcon,
+} from '@mui/icons-material';
+import {
+	AppBar,
+	Box,
+	Container,
+	IconButton,
+	Paper,
+	Tab,
+	Tabs,
+	Toolbar,
+	Typography,
+	alpha,
+} from '@mui/material';
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Container,
-  Box,
-  IconButton,
-  Tabs,
-  Tab,
-  Paper,
-  alpha,
-} from '@mui/material';
-import {
-  Dashboard as DashboardIcon,
-  Settings as SettingsIcon,
-  PhotoLibrary as PhotoLibraryIcon,
-  Tv as TvIcon,
-  CloudSync as CloudSyncIcon,
-  Security as SecurityIcon,
-} from '@mui/icons-material';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -32,7 +31,6 @@ export default function Layout({ children }: LayoutProps) {
   const navigationItems = [
     { label: 'Dashboard', path: '/', icon: <DashboardIcon /> },
     { label: 'Configuration', path: '/config', icon: <SettingsIcon /> },
-    { label: 'Authentication', path: '/auth', icon: <SecurityIcon /> },
     { label: 'Photo Gallery', path: '/photos', icon: <PhotoLibraryIcon /> },
     { label: 'Frame Manager', path: '/frame', icon: <TvIcon /> },
   ];
@@ -46,8 +44,8 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <Box sx={{ minHeight: '100vh' }}>
       {/* Glass AppBar */}
-      <AppBar 
-        position="sticky" 
+      <AppBar
+        position="sticky"
         elevation={0}
         sx={{
           backgroundColor: alpha('#ffffff', 0.05),
@@ -57,19 +55,19 @@ export default function Layout({ children }: LayoutProps) {
       >
         <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <CloudSyncIcon 
-              sx={{ 
-                mr: 2, 
+            <CloudSyncIcon
+              sx={{
+                mr: 2,
                 fontSize: 32,
                 background: 'linear-gradient(45deg, #007AFF, #5AC8FA)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
-              }} 
+              }}
             />
-            <Typography 
-              variant="h5" 
-              component="div" 
-              sx={{ 
+            <Typography
+              variant="h5"
+              component="div"
+              sx={{
                 fontWeight: 700,
                 background: 'linear-gradient(45deg, #ffffff, #ffffff80)',
                 WebkitBackgroundClip: 'text',
@@ -85,7 +83,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Glass Navigation */}
       <Container maxWidth="xl" sx={{ px: { xs: 2, sm: 3 } }}>
-        <Paper 
+        <Paper
           elevation={0}
           sx={{
             mt: 3,

@@ -1,5 +1,5 @@
 ---
-applyTo: '**'
+applyTo: '**.ts, **.tsx, **.js, **.jsx'
 ---
 
 Coding standards, domain knowledge, and preferences that AI should follow
@@ -64,7 +64,7 @@ maintainability, and quality across the codebase.
 
 ## 6. Testing
 
-- Use **Mocha** for unit testing.
+- Use **vitest** for unit testing.
 - Write tests for all public functions and components.
 - Use **React Testing Library** for testing React components.
 - Use **Cypress** for end-to-end testing.

@@ -1,2 +1,55 @@
-node_modules
-dist
+# Node modules (will be installed in container)
+node_modules/
+
+# Build output (will be built in container)
+dist/
+build/
+coverage/
+
+# Git files
+.git/
+.gitignore
+
+# Docker files (not needed inside image)
+Dockerfile*
+docker-compose*.yml
+
+# Logs
+*.log
+logs/
+
+# Environment files (use --env-file or -e flags instead)
+.env
+.env.*
+!.env.example
+
+# Lock files (KEEP pnpm-lock.yaml, exclude others)
+package-lock.json
+yarn.lock
+
+# Cache directories
+.cache
+.thumbnail-cache
+.eslintcache
+
+# Development files
+.vscode
+.prettierrc
+.eslintrc.json
+
+# Test files
+test/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+vitest.config.ts
+jest.config.js
+
+# Documentation (keep only README)
+specs/
+CLAUDE.md
+
+# OS files
+.DS_Store
+Thumbs.db

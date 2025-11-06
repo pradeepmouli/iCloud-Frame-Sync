@@ -1,21 +1,25 @@
 FROM node:slim
+
+# Install pnpm
+RUN npm install -g pnpm
+
 WORKDIR /usr/app
 
-# first copy just the package and the lock file, for caching purposes
+# Copy package files for dependency installation (caching layer)
 COPY package.json ./
-COPY package-lock.json ./
+COPY pnpm-lock.yaml ./
 
-# install dependencies
-RUN npm install
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
-# copy the entire project
+# Copy the entire project
 COPY . .
 
-# build
-RUN npm run build
+# Build the application
+RUN pnpm run build
 
 ENV NODE_ENV=production
 ENV LOG_LEVEL=info
 
-EXPOSE 3000
-CMD [ "npm", "start" ]
+EXPOSE 3001
+CMD [ "pnpm", "start:web" ]

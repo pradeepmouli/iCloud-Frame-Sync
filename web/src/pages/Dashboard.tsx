@@ -1,501 +1,439 @@
-import React, { useState, useEffect } from 'react';
+import { Pause as PauseIcon, PlayArrow as PlayArrowIcon, Refresh as RefreshIcon, Save as SaveIcon, Sync as SyncIcon, Warning as WarningIcon } from '@mui/icons-material';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  GridLegacy as Grid,
-  Chip,
-  Alert,
-  LinearProgress,
-  Stack,
-  Avatar,
-  Divider,
-  alpha,
+	Alert,
+	Box,
+	Button,
+	Card,
+	CardContent,
+	Chip,
+	CircularProgress,
+	Divider,
+	Stack,
+	TextField,
+	Typography,
 } from '@mui/material';
-import {
-  PlayArrow as PlayArrowIcon,
-  Stop as StopIcon,
-  Sync as SyncIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Schedule as ScheduleIcon,
-  CloudSync as CloudSyncIcon,
-  Computer as ComputerIcon,
-  Timer as TimerIcon,
-} from '@mui/icons-material';
-import { api, type AppStatus, type SyncStatus } from '../services/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { api } from '../services/api';
+import type {
+	SettingsConfigSnapshot,
+	SettingsUpdateRequest,
+	StatusResponse,
+} from '../types/index';
+
+interface SettingsFormState {
+  syncAlbumName: string;
+  frameHost: string;
+  syncIntervalSeconds: string;
+  logLevel: 'info' | 'warn' | 'debug';
+  corsOrigin: string;
+}
+
+function mapSettingsToForm(settings: SettingsConfigSnapshot): SettingsFormState {
+  return {
+    syncAlbumName: settings.syncAlbumName ?? '',
+    frameHost: settings.frameHost ?? '',
+    syncIntervalSeconds:
+      settings.syncIntervalSeconds !== undefined
+        ? String(settings.syncIntervalSeconds)
+        : '',
+    logLevel: settings.logLevel ?? 'info',
+    corsOrigin: settings.corsOrigin ?? '',
+  };
+}
 
 export default function Dashboard() {
-  const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [settings, setSettings] = useState<SettingsConfigSnapshot | null>(null);
+  const [formState, setFormState] = useState<SettingsFormState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadStatus();
-    const interval = setInterval(loadStatus, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStatus = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
-      const [appStatusData, syncStatusData] = await Promise.all([
-        api.getAppStatus(),
-        api.getSyncStatus(),
-      ]);
-      setAppStatus(appStatusData);
-      setSyncStatus(syncStatusData);
-    } catch (err: any) {
-      console.error('Failed to load status:', err);
+      setErrorMessage(null);
+      const statusResponse = await api.getStatus();
+      setStatus(statusResponse);
+      if (statusResponse.config) {
+        setSettings(statusResponse.config);
+        setFormState(mapSettingsToForm(statusResponse.config));
+      }
+    } catch (error: unknown) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load dashboard data.'
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleAction = async (action: string, apiCall: () => Promise<any>) => {
-    setActionLoading(action);
-    setMessage(null);
+  const refreshStatusOnly = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      const statusResponse = await api.getStatus();
+      setStatus(statusResponse);
+      if (statusResponse.config) {
+        setSettings(statusResponse.config);
+      }
+    } catch (error: unknown) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to refresh status.'
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const handleFieldChange = useCallback(
+    <K extends keyof SettingsFormState>(name: K) =>
+      (
+        event: React.ChangeEvent<
+          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >
+      ) => {
+        const value = event.target.value as SettingsFormState[K];
+        setFormState((current) =>
+          current
+            ? {
+                ...current,
+                [name]: value,
+              }
+            : current
+        );
+      },
+    []
+  );
+
+  const handleManualSync = useCallback(async () => {
+    setSyncing(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
     try {
-      const result = await apiCall();
-      setMessage(result.message);
-      await loadStatus();
-    } catch (err: any) {
-      setMessage(`Error: ${err.message}`);
+      const accepted = await api.queueManualSync({});
+      await refreshStatusOnly();
+      setSuccessMessage(`Manual sync accepted (operation ${accepted.operationId}).`);
+    } catch (error: unknown) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Failed to trigger manual sync.'
+      );
     } finally {
-      setActionLoading(null);
+      setSyncing(false);
     }
-  };
+  }, [refreshStatusOnly]);
 
-  const startApp = () => handleAction('start-app', api.startApp.bind(api));
-  const stopApp = () => handleAction('stop-app', api.stopApp.bind(api));
-  const startSync = () => handleAction('start-sync', api.startSync.bind(api));
-  const stopSync = () => handleAction('stop-sync', api.stopSync.bind(api));
-  const runSyncOnce = () =>
-    handleAction('sync-once', api.runSyncOnce.bind(api));
+  const handleSettingsSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!formState) {
+        return;
+      }
+
+      setSaving(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+
+      try {
+        const intervalValue = parseInt(formState.syncIntervalSeconds, 10);
+        const payload: SettingsUpdateRequest = {
+          syncAlbumName: formState.syncAlbumName.trim(),
+          frameHost: formState.frameHost.trim(),
+          logLevel: formState.logLevel,
+        };
+
+        if (!Number.isNaN(intervalValue)) {
+          payload.syncIntervalSeconds = intervalValue;
+        }
+
+        if (formState.corsOrigin.trim()) {
+          payload.corsOrigin = formState.corsOrigin.trim();
+        }
+
+        const newSettings = await api.updateSettings(payload);
+        setSettings(newSettings);
+        setFormState(mapSettingsToForm(newSettings));
+        setSuccessMessage('Settings saved successfully.');
+        await refreshStatusOnly();
+      } catch (error: unknown) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Failed to save settings.'
+        );
+      } finally {
+        setSaving(false);
+      }
+    },
+    [formState, refreshStatusOnly]
+  );
+
+  const latestOperationStatus = useMemo(() => {
+    if (!status?.sync) {
+      return 'No operations have been recorded yet.';
+    }
+    const state = status.sync.status;
+    return `Status: ${state.charAt(0).toUpperCase()}${state.slice(1)}`;
+  }, [status]);
+
+  const isConfigured = status?.config?.isConfigured ?? false;
+  const missingFields = status?.config?.missingFields ?? [];
+  const manualSyncDisabled = syncing || refreshDisabledState(status?.sync, isConfigured, missingFields);
+
+  function refreshDisabledState(sync: StatusResponse['sync'] | null | undefined, configured: boolean, missing: string[]): boolean {
+    if (!configured || missing.length > 0) {
+      return true;
+    }
+    if (!sync) {
+      return false;
+    }
+    return sync.status === 'running';
+  }
+
+  const scheduleInfo = status?.schedule ?? null;
 
   if (loading) {
     return (
-      <Box sx={{ width: '100%' }}>
-        <LinearProgress />
-        <Card sx={{ mt: 2 }}>
-          <CardContent>
-            <Typography>Loading dashboard...</Typography>
-          </CardContent>
-        </Card>
-      </Box>
+      <Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
+        <CircularProgress />
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          Loading dashboard...
+        </Typography>
+      </Stack>
     );
   }
 
   return (
-    <Box>
-      <Typography
-        variant="h3"
-        component="h1"
-        gutterBottom
-        sx={{
-          background: 'linear-gradient(45deg, #ffffff, #ffffff80)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          fontWeight: 700,
-          mb: 4,
-        }}
-      >
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Typography variant="h4" component="h1">
         Dashboard
       </Typography>
 
-      {message && (
-        <Alert
-          severity={message.includes('Error') ? 'error' : 'success'}
-          sx={{ mb: 3 }}
-        >
-          {message}
+      {errorMessage && (
+        <Alert severity="error" data-testid="dashboard-error">
+          {errorMessage}
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {/* Application Status Card */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={2}
-                sx={{ mb: 2 }}
+      {status?.sync?.error && (
+        <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 0 }}>
+          Latest sync reported an error: {status.sync.error}
+        </Alert>
+      )}
+
+      {(!isConfigured || missingFields.length > 0) && (
+        <Alert severity="warning" sx={{ mb: 0 }} data-testid="dashboard-setup-warning">
+          Setup incomplete. Please finish configuration before triggering manual sync.
+          {missingFields.length > 0 && (
+            <Box component="span" sx={{ display: 'block', mt: 1 }}>
+              Missing: {missingFields.join(', ')}
+            </Box>
+          )}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert severity="success" data-testid="dashboard-success">
+          {successMessage}
+        </Alert>
+      )}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+          gap: 3,
+          alignItems: 'stretch',
+        }}
+      >
+        <Card sx={{ height: '100%' }}>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6" component="h2">
+                Latest Operation
+              </Typography>
+              <Button
+                onClick={refreshStatusOnly}
+                startIcon={<RefreshIcon />}
+                disabled={refreshing}
+                size="small"
               >
-                <Avatar
-                  sx={{
-                    bgcolor: appStatus?.isRunning
-                      ? 'success.main'
-                      : 'error.main',
-                    width: 48,
-                    height: 48,
-                  }}
-                >
-                  <ComputerIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" component="h2">
-                    Application Status
-                  </Typography>
-                  <Chip
-                    label={appStatus?.isRunning ? 'Running' : 'Stopped'}
-                    color={appStatus?.isRunning ? 'success' : 'error'}
-                    icon={
-                      appStatus?.isRunning ? <CheckCircleIcon /> : <ErrorIcon />
-                    }
-                    variant="filled"
-                  />
-                </Box>
-              </Stack>
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </Stack>
 
-              <Divider sx={{ my: 2 }} />
-
-              <Stack spacing={2}>
-                {!appStatus?.isRunning ? (
-                  <Button
-                    variant="contained"
-                    startIcon={
-                      actionLoading === 'start-app' ? (
-                        <SyncIcon className="spin" />
-                      ) : (
-                        <PlayArrowIcon />
-                      )
-                    }
-                    onClick={startApp}
-                    disabled={actionLoading === 'start-app'}
-                    fullWidth
-                    size="large"
-                  >
-                    {actionLoading === 'start-app'
-                      ? 'Starting...'
-                      : 'Start Application'}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={
-                      actionLoading === 'stop-app' ? (
-                        <SyncIcon className="spin" />
-                      ) : (
-                        <StopIcon />
-                      )
-                    }
-                    onClick={stopApp}
-                    disabled={actionLoading === 'stop-app'}
-                    fullWidth
-                    size="large"
-                  >
-                    {actionLoading === 'stop-app'
-                      ? 'Stopping...'
-                      : 'Stop Application'}
-                  </Button>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Sync Status Card */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={2}
-                sx={{ mb: 2 }}
-              >
-                <Avatar
-                  sx={{
-                    bgcolor: syncStatus?.inProgress
-                      ? 'warning.main'
-                      : syncStatus?.isRunning
-                        ? 'success.main'
-                        : 'error.main',
-                    width: 48,
-                    height: 48,
-                  }}
-                >
-                  <CloudSyncIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" component="h2">
-                    Sync Status
-                  </Typography>
-                  <Chip
-                    label={
-                      syncStatus?.inProgress
-                        ? 'Syncing in progress'
-                        : syncStatus?.isRunning
-                          ? `Running (every ${syncStatus.intervalSeconds}s)`
-                          : 'Stopped'
-                    }
-                    color={
-                      syncStatus?.inProgress
-                        ? 'warning'
-                        : syncStatus?.isRunning
-                          ? 'success'
-                          : 'error'
-                    }
-                    icon={
-                      syncStatus?.inProgress ? (
-                        <SyncIcon className="spin" />
-                      ) : syncStatus?.isRunning ? (
-                        <CheckCircleIcon />
-                      ) : (
-                        <ErrorIcon />
-                      )
-                    }
-                    variant="filled"
-                  />
-                </Box>
-              </Stack>
-
-              {appStatus?.isRunning && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-
-                  <Stack spacing={2}>
-                    <Box>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        gutterBottom
-                      >
-                        Sync Interval: {syncStatus?.intervalSeconds} seconds
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Status:{' '}
-                        {syncStatus?.inProgress
-                          ? 'In Progress'
-                          : syncStatus?.isRunning
-                            ? 'Scheduled'
-                            : 'Idle'}
-                      </Typography>
-                    </Box>
-
-                    <Stack direction="row" spacing={1}>
-                      {!syncStatus?.isRunning ? (
-                        <Button
-                          variant="contained"
-                          startIcon={
-                            actionLoading === 'start-sync' ? (
-                              <SyncIcon className="spin" />
-                            ) : (
-                              <PlayArrowIcon />
-                            )
-                          }
-                          onClick={startSync}
-                          disabled={actionLoading === 'start-sync'}
-                          size="small"
-                        >
-                          {actionLoading === 'start-sync'
-                            ? 'Starting...'
-                            : 'Start Auto Sync'}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outlined"
-                          startIcon={
-                            actionLoading === 'stop-sync' ? (
-                              <SyncIcon className="spin" />
-                            ) : (
-                              <StopIcon />
-                            )
-                          }
-                          onClick={stopSync}
-                          disabled={actionLoading === 'stop-sync'}
-                          size="small"
-                        >
-                          {actionLoading === 'stop-sync'
-                            ? 'Stopping...'
-                            : 'Stop Auto Sync'}
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={
-                          actionLoading === 'sync-once' ? (
-                            <SyncIcon className="spin" />
-                          ) : (
-                            <SyncIcon />
-                          )
-                        }
-                        onClick={runSyncOnce}
-                        disabled={
-                          actionLoading === 'sync-once' ||
-                          syncStatus?.inProgress
-                        }
-                        size="small"
-                      >
-                        {actionLoading === 'sync-once'
-                          ? 'Syncing...'
-                          : 'Run Once'}
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Quick Stats Cards */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Avatar
-                sx={{
-                  bgcolor: 'primary.main',
-                  width: 64,
-                  height: 64,
-                  mx: 'auto',
-                  mb: 2,
-                }}
-              >
-                <Typography variant="h4" component="div">
-                  {appStatus?.isRunning ? '1' : '0'}
+            <Stack spacing={1} sx={{ mt: 2 }}>
+              <Typography variant="body1">
+                Operation ID: {status?.sync?.id ?? '—'}
+              </Typography>
+              <Typography variant="body1">{latestOperationStatus}</Typography>
+              <Typography variant="body1">
+                Photos Processed: {status?.sync ? status.sync.photoIds.length : 0}
+              </Typography>
+              <Typography variant="body1">
+                Attempt: {status?.sync ? status.sync.attempt : '—'}
+              </Typography>
+              <Typography variant="body1">
+                Started At: {status?.sync?.startedAt ?? '—'}
+              </Typography>
+              <Typography variant="body1">
+                Completed At: {status?.sync?.completedAt ?? '—'}
+              </Typography>
+              <Divider flexItem sx={{ my: 1 }} />
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Chip
+                  icon={scheduleInfo?.isPaused ? <PauseIcon /> : <PlayArrowIcon />}
+                  label={scheduleInfo?.isPaused ? 'Scheduler Paused' : 'Scheduler Active'}
+                  color={scheduleInfo?.isPaused ? 'warning' : 'success'}
+                  size="small"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Interval: {scheduleInfo?.intervalSeconds ?? '—'}s
                 </Typography>
-              </Avatar>
-              <Typography variant="h6" gutterBottom>
-                Services Running
+              </Stack>
+              <Typography variant="body1">
+                Next Sync: {status?.schedule?.nextRunAt ?? 'Not scheduled'}
+              </Typography>
+            </Stack>
+
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<SyncIcon />}
+              onClick={handleManualSync}
+              disabled={manualSyncDisabled}
+              sx={{ mt: 3 }}
+            >
+              {syncing ? 'Syncing…' : 'Trigger Manual Sync'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ height: '100%' }}>
+          <CardContent>
+            <Typography variant="h6" component="h2" gutterBottom>
+              Current Settings
+            </Typography>
+
+            <Stack spacing={1}>
+              <Typography variant="body2">
+                Sync Album: {settings?.syncAlbumName ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                Frame Host: {settings?.frameHost ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                Interval Seconds: {settings?.syncIntervalSeconds ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                Log Level: {settings?.logLevel ?? '—'}
+              </Typography>
+              <Typography variant="body2">
+                CORS Origin: {settings?.corsOrigin ?? '—'}
+              </Typography>
+              <Divider flexItem sx={{ my: 1 }} />
+              <Typography variant="body2" color="text.secondary">
+                Setup Status: {isConfigured ? 'Configured' : 'Setup Required'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Active background services
+                Missing Fields: {missingFields.length > 0 ? missingFields.join(', ') : 'None'}
               </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
 
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Avatar
-                sx={{
-                  bgcolor: 'success.main',
-                  width: 64,
-                  height: 64,
-                  mx: 'auto',
-                  mb: 2,
-                }}
+      <Card component="form" onSubmit={handleSettingsSubmit}>
+        <CardContent>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            alignItems={{ xs: 'stretch', md: 'flex-end' }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  md: 'repeat(3, minmax(0, 1fr))',
+                },
+                gap: 2,
+                flexGrow: 1,
+              }}
+            >
+              <TextField
+                label="Sync Album"
+                value={formState?.syncAlbumName ?? ''}
+                onChange={handleFieldChange('syncAlbumName')}
+                fullWidth
+                required
+              />
+
+              <TextField
+                label="Frame Host"
+                value={formState?.frameHost ?? ''}
+                onChange={handleFieldChange('frameHost')}
+                fullWidth
+                required
+              />
+
+              <TextField
+                label="Sync Interval (seconds)"
+                value={formState?.syncIntervalSeconds ?? ''}
+                onChange={handleFieldChange('syncIntervalSeconds')}
+                type="number"
+                inputProps={{ min: 0 }}
+                fullWidth
+              />
+
+              <TextField
+                select
+                label="Log Level"
+                value={formState?.logLevel ?? 'info'}
+                onChange={handleFieldChange('logLevel')}
+                fullWidth
+                SelectProps={{ native: true }}
               >
-                <Typography variant="h4" component="div">
-                  {syncStatus?.isRunning ? '✓' : '✗'}
-                </Typography>
-              </Avatar>
-              <Typography variant="h6" gutterBottom>
-                Auto Sync
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Automatic synchronization status
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+                <option value="info">info</option>
+                <option value="warn">warn</option>
+                <option value="debug">debug</option>
+              </TextField>
 
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Avatar
-                sx={{
-                  bgcolor: 'warning.main',
-                  width: 64,
-                  height: 64,
-                  mx: 'auto',
-                  mb: 2,
-                }}
-              >
-                <Typography variant="h4" component="div">
-                  {syncStatus?.intervalSeconds || 0}
-                </Typography>
-              </Avatar>
-              <Typography variant="h6" gutterBottom>
-                Sync Interval
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Seconds between automatic syncs
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* System Information Card */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                System Information
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <ScheduleIcon color="primary" />
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Application
-                      </Typography>
-                      <Typography variant="body1" fontWeight={600}>
-                        iCloud Frame Sync
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <CheckCircleIcon
-                      color={appStatus?.isRunning ? 'success' : 'error'}
-                    />
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Status
-                      </Typography>
-                      <Typography variant="body1" fontWeight={600}>
-                        {appStatus?.isRunning ? 'Active' : 'Inactive'}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <TimerIcon color="primary" />
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        Last Updated
-                      </Typography>
-                      <Typography variant="body1" fontWeight={600}>
-                        {new Date().toLocaleTimeString()}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <style jsx>{`
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-      `}</style>
+              <TextField
+                label="CORS Origin"
+                value={formState?.corsOrigin ?? ''}
+                onChange={handleFieldChange('corsOrigin')}
+                fullWidth
+                sx={{ gridColumn: { xs: 'auto', md: 'span 2' } }}
+              />
+            </Box>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              startIcon={<SaveIcon />}
+              disabled={saving}
+              sx={{ minWidth: 160 }}
+            >
+              {saving ? 'Saving…' : 'Save Settings'}
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
     </Box>
   );
 }
