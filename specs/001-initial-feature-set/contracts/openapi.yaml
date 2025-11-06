@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: iCloud Frame Sync API
+  version: 1.0.0
+  description: REST interfaces for web dashboard and automation flows.
+servers:
+  - url: https://localhost:3001/api
+paths:
+  /status:
+    get:
+      summary: Fetch overall sync status and schedule details.
+      tags: [Status]
+      responses:
+        '200':
+          description: Current sync status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+  /sync:
+    post:
+      summary: Trigger an immediate sync cycle.
+      tags: [Sync]
+      requestBody:
+        description: Optional overrides for album or frame targeting.
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      responses:
+        '202':
+          description: Sync accepted and scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncAccepted'
+  /albums:
+    get:
+      summary: List available iCloud photo albums.
+      tags: [Albums]
+      responses:
+        '200':
+          description: Collection of albums.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumCollection'
+  /photos:
+    get:
+      summary: Paginate photos within an album.
+      tags: [Albums]
+      parameters:
+        - $ref: '#/components/parameters/AlbumId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Page of photos with metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoPage'
+  /settings:
+    post:
+      summary: Update configuration settings.
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsUpdate'
+      responses:
+        '200':
+          description: Updated configuration snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingsResponse'
+  /connections/test:
+    post:
+      summary: Test connectivity to iCloud and Frame device.
+      tags: [Settings]
+      responses:
+        '200':
+          description: Connectivity results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionTestResult'
+components:
+  parameters:
+    AlbumId:
+      name: albumId
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Target iCloud album identifier.
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: One-based page offset.
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 48
+        default: 24
+      description: Number of items per page.
+  schemas:
+    StatusResponse:
+      type: object
+      properties:
+        sync:
+          $ref: '#/components/schemas/SyncOperation'
+        schedule:
+          $ref: '#/components/schemas/SyncSchedule'
+    SyncRequest:
+      type: object
+      properties:
+        albumName:
+          type: string
+        frameHost:
+          type: string
+    SyncAccepted:
+      type: object
+      required: [operationId]
+      properties:
+        operationId:
+          type: string
+    AlbumCollection:
+      type: object
+      properties:
+        albums:
+          type: array
+          items:
+            $ref: '#/components/schemas/Album'
+    PhotoPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Photo'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    SettingsUpdate:
+      type: object
+      required: [syncAlbumName, frameHost]
+      properties:
+        syncAlbumName:
+          type: string
+        frameHost:
+          type: string
+        syncIntervalSeconds:
+          type: integer
+          minimum: 30
+        logLevel:
+          type: string
+          enum: [info, warn, debug]
+        corsOrigin:
+          type: string
+    SettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        config:
+          $ref: '#/components/schemas/Configuration'
+    ConnectionTestResult:
+      type: object
+      properties:
+        icloud:
+          $ref: '#/components/schemas/ConnectionProbe'
+        frame:
+          $ref: '#/components/schemas/ConnectionProbe'
+    ConnectionProbe:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [connected, failed]
+        details:
+          type: string
+    Album:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        photoCount:
+          type: integer
+        lastSyncedAt:
+          type: string
+          format: date-time
+    Photo:
+      type: object
+      properties:
+        id:
+          type: string
+        albumId:
+          type: string
+        takenAt:
+          type: string
+          format: date-time
+        sizeBytes:
+          type: integer
+        format:
+          type: string
+        status:
+          type: string
+          enum: [pending, uploading, uploaded, failed]
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    SyncOperation:
+      type: object
+      properties:
+        id:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [running, succeeded, failed]
+        photoIds:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+          nullable: true
+        attempt:
+          type: integer
+        frameId:
+          type: string
+    SyncSchedule:
+      type: object
+      properties:
+        nextRunAt:
+          type: string
+          format: date-time
+        intervalSeconds:
+          type: integer
+        isPaused:
+          type: boolean
+    Configuration:
+      type: object
+      properties:
+        syncAlbumName:
+          type: string
+        frameHost:
+          type: string
+        syncIntervalSeconds:
+          type: integer
+        logLevel:
+          type: string
+        corsOrigin:
+          type: string
+        webPort:
+          type: integer
