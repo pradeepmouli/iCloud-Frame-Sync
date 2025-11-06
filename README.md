@@ -78,7 +78,7 @@ CORS_ORIGIN=http://localhost:3000
 - `ICLOUD_SYNC_INTERVAL`: Sync frequency in seconds (default: 60)
 - `LOG_LEVEL`: Logging level (default: "info")
 
-#### Web UI Settings  
+#### Web UI Settings
 - `WEB_PORT`: Web server port (default: 3001)
 - `CORS_ORIGIN`: Allowed CORS origin (default: "http://localhost:3000")
 
@@ -147,7 +147,7 @@ npm run start:web    # Run web server from dist/
 Once the web server is running, access the dashboard at `http://localhost:3001`:
 
 - **Dashboard**: Monitor sync status, view sync history, and manually trigger syncs
-- **Configuration**: 
+- **Configuration**:
   - Configure iCloud credentials and test connection
   - Set Samsung Frame TV host and verify connectivity
   - Handle MFA authentication flow
