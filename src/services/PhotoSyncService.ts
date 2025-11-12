@@ -456,6 +456,58 @@ export class PhotoSyncService {
 		};
 	}
 
+	/**
+	 * Fetch albums directly from iCloud (not from state store).
+	 * This is used by the photo gallery to browse all available albums.
+	 */
+	async fetchAlbumsFromiCloud(): Promise<AlbumSummary[]> {
+		if (!this.ready) {
+			throw new SetupRequiredError('Cannot fetch albums until iCloud is configured.');
+		}
+
+		const albums = await this.iCloudEndpoint.albums;
+		return albums.map((album) => ({
+			id: album.id,
+			name: album.name,
+			photoCount: 0, // Will be populated when photos are fetched
+			lastSyncedAt: null,
+		}));
+	}
+
+	/**
+	 * Fetch photos from a specific iCloud album (not from state store).
+	 * This is used by the photo gallery to browse all available photos.
+	 */
+	async fetchPhotosFromiCloud(query: PhotoListQuery): Promise<PhotoPage> {
+		if (!this.ready) {
+			throw new SetupRequiredError('Cannot fetch photos until iCloud is configured.');
+		}
+
+		const photos = await this.iCloudEndpoint.listPhotos(query.albumId);
+		const sorted = [...photos].sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+		const total = sorted.length;
+		const startIndex = Math.max(0, (query.page - 1) * query.pageSize);
+		const paged = sorted.slice(startIndex, startIndex + query.pageSize);
+
+		const items: PhotoSummary[] = paged.map((photo) => ({
+			id: photo.id,
+			albumId: query.albumId,
+			takenAt: photo.lastModified.toISOString(),
+			sizeBytes: photo.size,
+			format: path.extname(photo.filename).slice(1).toLowerCase() || 'unknown',
+			status: 'pending' as const,
+		}));
+
+		return {
+			items,
+			pagination: {
+				page: query.page,
+				pageSize: query.pageSize,
+				total,
+			},
+		};
+	}
+
 	async queueManualSync(request: ManualSyncRequest): Promise<SyncAccepted> {
 		if (!this.ready) {
 			throw new SetupRequiredError(

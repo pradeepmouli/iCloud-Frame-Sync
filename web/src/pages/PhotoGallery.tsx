@@ -70,10 +70,10 @@ export default function PhotoGallery() {
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadAlbums = useCallback(async () => {
+  const loadAlbums = useCallback(async (refresh: boolean = false) => {
     setLoadingAlbums(true);
     try {
-      const albumList = await api.listAlbums();
+      const albumList = await api.listAlbums(refresh);
       setAlbums(albumList);
       if (albumList.length > 0) {
         setSelectedAlbumId((current) => current || albumList[0].id);
@@ -92,7 +92,7 @@ export default function PhotoGallery() {
   }, []);
 
   const loadPhotos = useCallback(
-    async (albumId: string, page: number = 1) => {
+    async (albumId: string, page: number = 1, refresh: boolean = false) => {
       if (!albumId) {
         setPhotoPage(null);
         return;
@@ -104,6 +104,7 @@ export default function PhotoGallery() {
           albumId,
           page,
           pageSize: PAGE_SIZE,
+          refresh,
         });
         setPhotoPage(pageResponse);
         setErrorMessage(null);
@@ -138,13 +139,19 @@ export default function PhotoGallery() {
     setSelectedAlbumId(event.target.value);
   };
 
+  const handleRefreshAlbums = () => {
+    loadAlbums(true).catch(() => {
+      setErrorMessage('Failed to refresh albums from iCloud.');
+    });
+  };
+
   const handleRefreshPhotos = () => {
     if (!selectedAlbumId) {
       return;
     }
     const currentPage = photoPage?.pagination.page ?? 1;
-    loadPhotos(selectedAlbumId, currentPage).catch(() => {
-      setErrorMessage('Failed to refresh photos.');
+    loadPhotos(selectedAlbumId, currentPage, true).catch(() => {
+      setErrorMessage('Failed to refresh photos from iCloud.');
     });
   };
 
@@ -215,7 +222,7 @@ export default function PhotoGallery() {
                 Album Selection
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Choose an iCloud album to inspect recent sync results.
+                Browse all albums from your iCloud Photos library. Use "Refresh from iCloud" to fetch the latest albums.
               </Typography>
             </Box>
           </Stack>
@@ -241,10 +248,10 @@ export default function PhotoGallery() {
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={loadAlbums}
+                onClick={handleRefreshAlbums}
                 disabled={loadingAlbums}
               >
-                {loadingAlbums ? 'Refreshing…' : 'Refresh Albums'}
+                {loadingAlbums ? 'Refreshing from iCloud…' : 'Refresh from iCloud'}
               </Button>
               <Button
                 variant="contained"
@@ -252,7 +259,7 @@ export default function PhotoGallery() {
                 onClick={handleRefreshPhotos}
                 disabled={loadingPhotos || !selectedAlbumId}
               >
-                {loadingPhotos ? 'Loading…' : 'Refresh Photos'}
+                {loadingPhotos ? 'Loading from iCloud…' : 'Refresh Photos from iCloud'}
               </Button>
             </Stack>
           </Stack>

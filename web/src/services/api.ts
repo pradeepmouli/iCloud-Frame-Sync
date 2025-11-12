@@ -155,16 +155,18 @@ class ApiService {
 		return normalizeSyncAccepted(response);
 	}
 
-	async listAlbums(): Promise<AlbumSummary[]> {
-		const response = await this.request<unknown>('/albums');
+	async listAlbums(refresh?: boolean): Promise<AlbumSummary[]> {
+		const queryString = refresh ? this.buildQuery({ refresh: 'true' }) : '';
+		const response = await this.request<unknown>(`/albums${queryString}`);
 		return normalizeAlbumCollection(response);
 	}
 
-	async listPhotos(query: PhotoListQuery): Promise<PhotoPage> {
+	async listPhotos(query: PhotoListQuery & { refresh?: boolean }): Promise<PhotoPage> {
 		const queryString = this.buildQuery({
 			albumId: query.albumId,
 			page: query.page,
 			pageSize: query.pageSize,
+			...(query.refresh ? { refresh: 'true' } : {}),
 		});
 		const response = await this.request<unknown>(`/photos${queryString}`);
 		return normalizePhotoPage(response);

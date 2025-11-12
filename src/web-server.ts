@@ -564,13 +564,20 @@ export async function createWebServer(
 		}
 	});
 
-	app.get('/api/albums', async (_req: Request, res: Response) => {
+	app.get('/api/albums', async (req: Request, res: Response) => {
+		const refresh = req.query.refresh === 'true';
 		try {
-			const albums = await photoSyncService.listAlbums();
+			const albums = refresh 
+				? await photoSyncService.fetchAlbumsFromiCloud()
+				: await photoSyncService.listAlbums();
 			res.json({ albums: albums satisfies AlbumSummary[] });
 		} catch (error) {
-			logger.error({ error }, 'Failed to list albums');
-			res.status(500).json({ error: 'Failed to list albums' });
+			logger.error({ error, refresh }, 'Failed to list albums');
+			if (error instanceof SetupRequiredError) {
+				res.status(503).json({ error: error.message });
+			} else {
+				res.status(500).json({ error: 'Failed to list albums' });
+			}
 		}
 	});
 
@@ -583,17 +590,28 @@ export async function createWebServer(
 
 		const page = parsePositiveInteger(req.query.page, 1);
 		const pageSize = parsePositiveInteger(req.query.pageSize, 24);
+		const refresh = req.query.refresh === 'true';
 
 		try {
-			const photoPage = await photoSyncService.listPhotos({
-				albumId,
-				page,
-				pageSize,
-			} satisfies PhotoListQuery);
+			const photoPage = refresh
+				? await photoSyncService.fetchPhotosFromiCloud({
+						albumId,
+						page,
+						pageSize,
+				  } satisfies PhotoListQuery)
+				: await photoSyncService.listPhotos({
+						albumId,
+						page,
+						pageSize,
+				  } satisfies PhotoListQuery);
 			res.json(photoPage satisfies PhotoPage);
 		} catch (error) {
-			logger.error({ error, albumId, page, pageSize }, 'Failed to list photos');
-			res.status(500).json({ error: 'Failed to list photos' });
+			logger.error({ error, albumId, page, pageSize, refresh }, 'Failed to list photos');
+			if (error instanceof SetupRequiredError) {
+				res.status(503).json({ error: error.message });
+			} else {
+				res.status(500).json({ error: 'Failed to list photos' });
+			}
 		}
 	});
 
