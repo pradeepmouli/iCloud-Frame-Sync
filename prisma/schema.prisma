@@ -1,0 +1,188 @@
+// Prisma Schema for iCloud Frame Sync
+// Database: SQLite (file-based persistence)
+// Feature: 002-ui-polish-persistence
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Configuration Management (US1: Streamlined Configuration)
+// ============================================================================
+
+model Configuration {
+  id                String   @id @default(cuid())
+
+  // iCloud Connection Section
+  icloudUsername    String?
+  icloudPassword    String?  // Encrypted with AES-256-GCM
+  icloudSourceAlbum String?
+  icloudSessionToken String? // Encrypted, for MFA sessions
+
+  // Frame Connection Section
+  frameHost         String?
+  framePort         Int      @default(8002)
+  frameConnectionStatus String @default("unknown") // unknown, connected, disconnected, error
+
+  // Sync Configuration Section
+  syncInterval      Int      @default(60) // seconds
+  syncEnabled       Boolean  @default(false)
+  deleteAfterSync   Boolean  @default(true)
+  maxRetries        Int      @default(3)
+
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  version           Int      @default(1) // For schema migrations
+
+  @@map("configuration")
+}
+
+// ============================================================================
+// Photo Tracking (US3: Photo Gallery, US4: Persistence)
+// ============================================================================
+
+model Album {
+  id              String   @id @default(cuid())
+  albumId         String   @unique // iCloud album identifier
+  name            String
+  photoCount      Int      @default(0)
+  lastFetchedAt   DateTime?
+  isVisible       Boolean  @default(true)
+
+  // Relationships
+  photos          PhotoRecord[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([albumId])
+  @@index([lastFetchedAt])
+  @@map("albums")
+}
+
+model PhotoRecord {
+  id                String   @id @default(cuid())
+
+  // Photo identification
+  checksum          String   @unique // SHA-256 of file content
+  filename          String
+  sourceAlbumId     String   // FK to Album
+  sourcePhotoId     String   // iCloud photo identifier
+
+  // Storage locations
+  sourcePath        String?  // Path in iCloud
+  frameContentId    String?  // Content ID on Frame TV (MY_xxxxx format)
+
+  // Sync tracking
+  status            String   @default("pending") // pending, syncing, synced, failed
+  lastSyncedAt      DateTime?
+  lastErrorAt       DateTime?
+  errorMessage      String?
+  errorCount        Int      @default(0)
+  retryCount        Int      @default(0)
+
+  // Photo metadata
+  captureDate       DateTime?
+  fileSize          Int?     // bytes
+  width             Int?
+  height            Int?
+  mimeType          String?
+
+  // Relationships
+  album             Album    @relation(fields: [sourceAlbumId], references: [id], onDelete: Cascade)
+  syncHistory       SyncHistory[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([checksum])
+  @@index([sourceAlbumId])
+  @@index([status])
+  @@index([lastSyncedAt])
+  @@index([frameContentId])
+  @@map("photo_records")
+}
+
+// ============================================================================
+// Sync Operations (US2: Dashboard, US4: Persistence)
+// ============================================================================
+
+model SyncState {
+  id                String   @id @default(cuid())
+
+  // Current operation state
+  status            String   @default("idle") // idle, running, paused, error
+  currentPhotoId    String?  // FK to PhotoRecord
+  progressPercent   Int      @default(0)
+  estimatedTimeLeft Int?     // seconds
+
+  // Operation counters
+  photosTotal       Int      @default(0)
+  photosProcessed   Int      @default(0)
+  photosFailed      Int      @default(0)
+  photosSkipped     Int      @default(0)
+
+  // Current error state
+  lastError         String?
+  lastErrorAt       DateTime?
+
+  // Session tracking
+  sessionStartedAt  DateTime?
+  sessionEndedAt    DateTime?
+
+  updatedAt         DateTime @updatedAt
+
+  @@map("sync_state")
+}
+
+model SyncHistory {
+  id                String   @id @default(cuid())
+
+  // Operation details
+  photoRecordId     String   // FK to PhotoRecord
+  operation         String   // download, upload, delete, retry
+  status            String   // started, completed, failed
+
+  // Timing
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  durationMs        Int?
+
+  // Outcome
+  success           Boolean  @default(false)
+  errorMessage      String?
+  errorCode         String?
+
+  // Context
+  retryAttempt      Int      @default(0)
+  fileSize          Int?     // bytes transferred
+
+  // Relationships
+  photoRecord       PhotoRecord @relation(fields: [photoRecordId], references: [id], onDelete: Cascade)
+
+  @@index([photoRecordId])
+  @@index([startedAt])
+  @@index([status])
+  @@map("sync_history")
+}
+
+// ============================================================================
+// System Metadata
+// ============================================================================
+
+model DatabaseMetadata {
+  id                String   @id @default(cuid())
+  key               String   @unique
+  value             String
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("database_metadata")
+}

@@ -4,7 +4,14 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { Logger } from 'pino';
 
+import { validateBody } from './lib/validation.js';
 import { createComponentLogger, createLogger } from './observability/logger.js';
+import {
+	ConfigurationUpdateSchema,
+	TestFrameRequestSchema,
+	TestICloudRequestSchema,
+} from './schemas/configuration.schema.js';
+import { configurationService } from './services/ConfigurationService.js';
 import type { ConnectionTester, ConnectionTestResult, FrameConnectionTestRequest, ICloudConnectionTestRequest } from './services/connectionTypes.js';
 import type {
 	AlbumSummary,
@@ -338,6 +345,98 @@ export async function createWebServer(
 			}
 		}
 	};
+
+	// ========== Configuration Endpoints ==========
+
+	/**
+	 * GET /api/configuration
+	 * Retrieve current configuration (sanitized)
+	 */
+	app.get('/api/configuration', async (_req: Request, res: Response) => {
+		try {
+			const configuration = await configurationService.getConfiguration();
+			res.json(configuration);
+		} catch (error) {
+			logger.error({ error }, 'Failed to fetch configuration');
+			res.status(500).json({
+				error: 'Failed to retrieve configuration',
+				message: error instanceof Error ? error.message : 'Unknown error',
+			});
+		}
+	});
+
+	/**
+	 * POST /api/configuration
+	 * Update configuration with validation
+	 */
+	app.post(
+		'/api/configuration',
+		validateBody(ConfigurationUpdateSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const updates = req.body;
+				const configuration = await configurationService.updateConfiguration(updates);
+				res.json(configuration);
+			} catch (error) {
+				logger.error({ error }, 'Failed to update configuration');
+				res.status(500).json({
+					error: 'Failed to update configuration',
+					message: error instanceof Error ? error.message : 'Unknown error',
+				});
+			}
+		},
+	);
+
+	/**
+	 * POST /api/configuration/test-icloud
+	 * Test iCloud connection without saving
+	 */
+	app.post(
+		'/api/configuration/test-icloud',
+		validateBody(TestICloudRequestSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const { username, password, sourceAlbum } = req.body;
+				const result = await configurationService.testICloudConnection(
+					username,
+					password,
+					sourceAlbum,
+				);
+				res.json(result);
+			} catch (error) {
+				logger.error({ error }, 'iCloud connection test failed');
+				res.status(500).json({
+					success: false,
+					message: error instanceof Error ? error.message : 'Connection test failed',
+				});
+			}
+		},
+	);
+
+	/**
+	 * POST /api/configuration/test-frame
+	 * Test Frame TV connection without saving
+	 */
+	app.post(
+		'/api/configuration/test-frame',
+		validateBody(TestFrameRequestSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const { host, port } = req.body;
+				const result = await configurationService.testFrameConnection(host, port);
+				res.json(result);
+			} catch (error) {
+				logger.error({ error }, 'Frame TV connection test failed');
+				res.status(500).json({
+					success: false,
+					message: error instanceof Error ? error.message : 'Connection test failed',
+				});
+			}
+		},
+	);
+
+	// ========== Authentication Endpoints ==========
+
 
 	app.post('/api/auth/icloud', async (req: Request, res: Response) => {
 		pruneExpiredSessions();

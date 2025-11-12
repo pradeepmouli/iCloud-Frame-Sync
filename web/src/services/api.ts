@@ -2,8 +2,11 @@ import type {
 	AlbumSummary,
 	AppStatus,
 	AuthenticateICloudResponse,
+	ConfigurationResponse,
+	ConfigurationUpdate,
 	ConnectionTestRequestPayload,
 	ConnectionTestResponsePayload,
+	ConnectionTestResult,
 	ConnectionTestResultPayload,
 	FrameArt,
 	FrameArtListQuery,
@@ -24,6 +27,8 @@ import type {
 	SyncOperation,
 	SyncScheduleState,
 	SyncStatus,
+	TestFrameRequest,
+	TestICloudRequest,
 } from '../types/index';
 
 const API_BASE = '/api';
@@ -288,6 +293,47 @@ class ApiService {
 			return status.config;
 		}
 		throw new Error('Configuration snapshot is not available yet.');
+	}
+
+	// ========== Configuration API (Database-backed) ==========
+
+	/**
+	 * Get current configuration
+	 */
+	async getConfiguration(): Promise<ConfigurationResponse> {
+		return this.request<ConfigurationResponse>('/configuration', {
+			method: 'GET',
+		});
+	}
+
+	/**
+	 * Update configuration (partial update)
+	 */
+	async updateConfiguration(updates: ConfigurationUpdate): Promise<ConfigurationResponse> {
+		return this.request<ConfigurationResponse>('/configuration', {
+			method: 'POST',
+			body: JSON.stringify(updates),
+		});
+	}
+
+	/**
+	 * Test iCloud connection without saving
+	 */
+	async testICloudConnection(request: TestICloudRequest): Promise<ConnectionTestResult> {
+		return this.request<ConnectionTestResult>('/configuration/test-icloud', {
+			method: 'POST',
+			body: JSON.stringify(request),
+		});
+	}
+
+	/**
+	 * Test Frame TV connection without saving
+	 */
+	async testFrameConnection(request: TestFrameRequest): Promise<ConnectionTestResult> {
+		return this.request<ConnectionTestResult>('/configuration/test-frame', {
+			method: 'POST',
+			body: JSON.stringify(request),
+		});
 	}
 }
 

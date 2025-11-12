@@ -1,4 +1,4 @@
-import { Refresh as RefreshIcon, Save as SaveIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 import {
 	Alert,
 	Avatar,
@@ -8,81 +8,27 @@ import {
 	CardContent,
 	Chip,
 	GridLegacy as Grid,
-	MenuItem,
 	Stack,
-	TextField,
 	Typography,
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { ConfigurationForm } from '../components/forms/ConfigurationForm';
 import MfaDialog from '../components/MfaDialog';
 import { api } from '../services/api';
+import type { ConfigurationResponse, ConfigurationUpdate, ConnectionTestResult } from '../types';
 import type {
 	ConnectionTestRequestPayload,
 	ConnectionTestResponsePayload,
 	ConnectionTestResultPayload,
 	FrameConnectionTestPayload,
 	SettingsConfigSnapshot,
-	SettingsUpdateRequest,
 } from '../types/index';
 
-interface SettingsFormState {
-  syncAlbumName: string;
-  frameHost: string;
-  syncIntervalSeconds: string;
-  logLevel: 'info' | 'warn' | 'debug';
-  corsOrigin: string;
-  icloudUsername: string;
-  icloudPassword: string;
-  hasIcloudPassword: boolean;
-}
-
-function mapSettingsToForm(settings: SettingsConfigSnapshot): SettingsFormState {
-  return {
-    syncAlbumName: settings.syncAlbumName ?? '',
-    frameHost: settings.frameHost ?? '',
-    syncIntervalSeconds:
-      settings.syncIntervalSeconds !== undefined
-        ? String(settings.syncIntervalSeconds)
-        : '',
-    logLevel: settings.logLevel ?? 'info',
-    corsOrigin: settings.corsOrigin ?? '',
-    icloudUsername: settings.iCloudUsername ?? '',
-    icloudPassword: '',
-    hasIcloudPassword: Boolean(settings.hasICloudPassword),
-  };
-}
-
-function buildPayload(formState: SettingsFormState): SettingsUpdateRequest {
-  const payload: SettingsUpdateRequest = {
-    syncAlbumName: formState.syncAlbumName.trim(),
-    frameHost: formState.frameHost.trim(),
-    logLevel: formState.logLevel,
-  };
-
-  const intervalValue = parseInt(formState.syncIntervalSeconds, 10);
-  if (!Number.isNaN(intervalValue)) {
-    payload.syncIntervalSeconds = intervalValue;
-  }
-
-  if (formState.corsOrigin.trim()) {
-    payload.corsOrigin = formState.corsOrigin.trim();
-  }
-
-  if (formState.icloudUsername.trim()) {
-    payload.iCloudUsername = formState.icloudUsername.trim();
-  }
-
-  if (formState.icloudPassword.trim()) {
-    payload.iCloudPassword = formState.icloudPassword;
-  }
-
-  return payload;
-}
 
 export default function Configuration() {
   const [snapshot, setSnapshot] = useState<SettingsConfigSnapshot | null>(null);
-  const [formState, setFormState] = useState<SettingsFormState | null>(null);
+  const [configInitial, setConfigInitial] = useState<ConfigurationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -98,48 +44,30 @@ export default function Configuration() {
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [mfaError, setMfaError] = useState<string | null>(null);
 
-  const canSubmit = useMemo(() => {
-    if (!formState) {
-      return false;
-    }
-    const hasUsername = formState.icloudUsername.trim().length > 0;
-    const hasPassword = formState.icloudPassword.trim().length > 0 || formState.hasIcloudPassword;
-    return (
-      formState.syncAlbumName.trim().length > 0 &&
-      formState.frameHost.trim().length > 0 &&
-      hasUsername &&
-      hasPassword
-    );
-  }, [formState]);
-
   const canTestConnections = useMemo(() => {
-    if (!formState) {
-      return false;
-    }
-    return (
-      formState.icloudUsername.trim().length > 0 &&
-      formState.icloudPassword.trim().length > 0 &&
-      formState.frameHost.trim().length > 0
-    );
-  }, [formState]);
+    const username = (configInitial?.icloudUsername ?? snapshot?.iCloudUsername ?? '').trim();
+    const frameHost = (configInitial?.frameHost ?? snapshot?.frameHost ?? '').trim();
+    const hasPassword = (configInitial?.hasPassword ?? snapshot?.hasICloudPassword ?? false);
+    return username.length > 0 && frameHost.length > 0 && hasPassword;
+  }, [configInitial, snapshot]);
 
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const status = await api.getStatus();
+      const [status, config] = await Promise.all([api.getStatus(), api.getConfiguration().catch(() => null)]);
       if (!status.config) {
         setSnapshot(null);
-        setFormState(null);
         setErrorMessage('Configuration snapshot is not yet available.');
-        return;
+      } else {
+        setSnapshot(status.config);
       }
 
-      setSnapshot(status.config);
-      setFormState(mapSettingsToForm(status.config));
+      if (config) {
+        setConfigInitial(config);
+      }
     } catch (error: unknown) {
       setSnapshot(null);
-      setFormState(null);
       setErrorMessage(
         error instanceof Error ? error.message : 'Failed to load configuration.'
       );
@@ -152,68 +80,7 @@ export default function Configuration() {
     void loadConfiguration();
   }, [loadConfiguration]);
 
-  const handleFieldChange = useCallback(
-    <K extends keyof SettingsFormState>(field: K) =>
-      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const value = event.target.value as SettingsFormState[K];
-        setFormState((current) =>
-          current
-            ? {
-                ...current,
-                [field]: value,
-              }
-            : current
-        );
-      },
-    []
-  );
-
-  const handleLogLevelChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const value = event.target.value as SettingsFormState['logLevel'];
-      setFormState((current) =>
-        current
-          ? {
-              ...current,
-              logLevel: value,
-            }
-          : current
-      );
-    },
-    []
-  );
-
-  const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!formState) {
-        return;
-      }
-
-      setSaving(true);
-      setErrorMessage(null);
-      setSuccessMessage(null);
-
-      try {
-        const payload = buildPayload(formState);
-        const updated = await api.updateSettings(payload);
-        setSnapshot(updated);
-        setFormState(mapSettingsToForm(updated));
-        setSuccessMessage('Settings updated successfully.');
-      } catch (error: unknown) {
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to save configuration.'
-        );
-      } finally {
-        setSaving(false);
-      }
-    },
-    [formState]
-  );
-
-  const handleReset = useCallback(() => {
-    void loadConfiguration();
-  }, [loadConfiguration]);
+  // the page-level "Run Connection Test" uses stored snapshot/config when available
 
   const describeICloudResult = useCallback((result: ConnectionTestResultPayload): string => {
     if (result.success) {
@@ -237,22 +104,25 @@ export default function Configuration() {
   const describeFrameResult = useCallback((result: ConnectionTestResultPayload): string => {
     if (result.success) {
       const responseTime = typeof result.responseTimeMs === 'number' ? ` (response time ${result.responseTimeMs} ms)` : '';
-      const host = typeof result.host === 'string' ? result.host : formState?.frameHost ?? 'frame';
+      const host = typeof result.host === 'string' ? result.host : (configInitial?.frameHost ?? snapshot?.frameHost ?? 'frame');
       return `Frame at ${host} responded successfully${responseTime}.`;
     }
     return result.error ?? 'Unable to reach the Samsung Frame device.';
-  }, [formState?.frameHost]);
+  }, [configInitial?.frameHost, snapshot?.frameHost]);
 
   const handleTestConnections = useCallback(async () => {
-    if (!formState) {
+    const username = (configInitial?.icloudUsername ?? snapshot?.iCloudUsername ?? '').trim();
+    const frameHost = (configInitial?.frameHost ?? snapshot?.frameHost ?? '').trim();
+
+    // If we don't have a password available on this page, ask user to use the form's Test button
+    const hasStoredPassword = Boolean(configInitial?.hasPassword ?? snapshot?.hasICloudPassword ?? false);
+    if (!username || !frameHost) {
+      setConnectionError('Configuration is incomplete — ensure iCloud username and frame host are set.');
       return;
     }
-    const username = formState.icloudUsername.trim();
-    const password = formState.icloudPassword.trim();
-    const frameHost = formState.frameHost.trim();
 
-    if (!username || !password || !frameHost) {
-      setConnectionError('Enter your iCloud username, password, and frame host before testing connections.');
+    if (!hasStoredPassword) {
+      setConnectionError('No password available locally — open the Configuration form and use the Test button to provide credentials.');
       return;
     }
 
@@ -260,7 +130,7 @@ export default function Configuration() {
     const payload: ConnectionTestRequestPayload = {
       icloud: {
         username,
-        password,
+        // no password supplied — server may use stored credential
         forceRefresh: true,
       },
       frame: framePayload,
@@ -288,7 +158,7 @@ export default function Configuration() {
     } finally {
       setConnectionTesting(false);
     }
-  }, [formState]);
+  }, [configInitial, snapshot]);
 
   const handleMfaSubmit = useCallback(async (code: string) => {
     if (!mfaContext) {
@@ -338,7 +208,7 @@ export default function Configuration() {
     );
   }
 
-  if (!formState) {
+  if (!snapshot && !configInitial) {
     return (
       <Box>
         <Typography
@@ -407,128 +277,39 @@ export default function Configuration() {
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={8}>
-          <Card component="form" onSubmit={handleSubmit}>
+          <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                <Avatar sx={{ bgcolor: 'secondary.main', width: 48, height: 48 }}>
-                  <SettingsIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" component="h2">
-                    Sync Configuration
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Update album selection, target frame host, and runtime options.
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="iCloud Username"
-                    value={formState.icloudUsername}
-                    onChange={handleFieldChange('icloudUsername')}
-                    fullWidth
-                    required
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label={
-                      formState.hasIcloudPassword
-                        ? 'iCloud Password (leave blank to keep existing)'
-                        : 'iCloud Password'
-                    }
-                    value={formState.icloudPassword}
-                    onChange={handleFieldChange('icloudPassword')}
-                    type="password"
-                    fullWidth
-                    required={!formState.hasIcloudPassword}
-                    helperText={
-                      formState.hasIcloudPassword
-                        ? 'Enter a new password to replace the stored credential.'
-                        : undefined
-                    }
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Sync Album Name"
-                    value={formState.syncAlbumName}
-                    onChange={handleFieldChange('syncAlbumName')}
-                    fullWidth
-                    required
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    label="Frame Host"
-                    value={formState.frameHost}
-                    onChange={handleFieldChange('frameHost')}
-                    fullWidth
-                    required
-                    helperText="Hostname or IP address of your Samsung Frame TV."
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Sync Interval (seconds)"
-                    value={formState.syncIntervalSeconds}
-                    onChange={handleFieldChange('syncIntervalSeconds')}
-                    type="number"
-                    inputProps={{ min: 0 }}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    select
-                    label="Log Level"
-                    value={formState.logLevel}
-                    onChange={handleLogLevelChange}
-                    fullWidth
-                  >
-                    <MenuItem value="info">info</MenuItem>
-                    <MenuItem value="warn">warn</MenuItem>
-                    <MenuItem value="debug">debug</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="CORS Origin"
-                    value={formState.corsOrigin}
-                    onChange={handleFieldChange('corsOrigin')}
-                    fullWidth
-                    helperText="Optional origin allowed to access the REST API."
-                  />
-                </Grid>
-              </Grid>
-
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                justifyContent="flex-end"
-                spacing={2}
-                sx={{ mt: 4 }}
-              >
-                <Button
-                  type="button"
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={handleReset}
-                  disabled={loading}
-                >
-                  Reset
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  disabled={!canSubmit || saving}
-                >
-                  {saving ? 'Saving…' : 'Save Changes'}
-                </Button>
-              </Stack>
+              <ConfigurationForm
+                initialData={configInitial ?? undefined}
+                isLoading={saving}
+                onSubmit={async (updates: ConfigurationUpdate) => {
+                  setSaving(true);
+                  setErrorMessage(null);
+                  setSuccessMessage(null);
+                  try {
+                    const updated = await api.updateConfiguration(updates);
+                    // Refresh both snapshot and config
+                    const status = await api.getStatus();
+                    setSnapshot(status.config ?? null);
+                    // snapshot already refreshed from status
+                    setSnapshot(status.config ?? null);
+                    setConfigInitial(updated);
+                    setSuccessMessage('Configuration saved');
+                  } catch (err: unknown) {
+                    setErrorMessage(err instanceof Error ? err.message : 'Failed to save configuration');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                onTestICloud={async (username: string, password: string, sourceAlbum?: string) => {
+                  const result = await api.testICloudConnection({ username, password, sourceAlbum });
+                  return result as unknown as ConnectionTestResult;
+                }}
+                onTestFrame={async (host: string, port: number) => {
+                  const result = await api.testFrameConnection({ host, port });
+                  return result as unknown as ConnectionTestResult;
+                }}
+              />
             </CardContent>
           </Card>
         </Grid>
