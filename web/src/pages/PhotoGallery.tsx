@@ -211,6 +211,14 @@ export default function PhotoGallery() {
         </Alert>
       )}
 
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body2">
+          <strong>Photo Gallery</strong> lets you browse all your iCloud albums and photos. 
+          Click "Refresh from iCloud" to see your latest albums and photos directly from iCloud, 
+          not just those that have been synced to your Frame TV.
+        </Typography>
+      </Alert>
+
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
