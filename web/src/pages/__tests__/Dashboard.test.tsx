@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '../../services/api';
 import Dashboard from '../Dashboard';
@@ -273,7 +273,7 @@ describe('Dashboard page', () => {
 			renderDashboard();
 
 			await screen.findByTestId('dashboard-setup-warning');
-			
+
 			const configureLink = screen.getByRole('link', { name: /configure/i });
 
 			expect(configureLink).toBeInTheDocument();
@@ -526,7 +526,7 @@ describe('Dashboard page', () => {
 			renderDashboard();
 
 			await screen.findByText('Running');
-			
+
 			// Verify the component loaded with running status
 			expect(screen.getByText('Progress')).toBeInTheDocument();
 		});
