@@ -11,26 +11,58 @@ import {
 	Stack,
 	Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import { ConfigurationForm } from '../components/forms/ConfigurationForm';
 import MfaDialog from '../components/MfaDialog';
 import { api } from '../services/api';
-import type { ConfigurationResponse, ConfigurationUpdate, ConnectionTestResult } from '../types';
+import type { ConfigurationUpdate, ConnectionTestResult } from '../types';
 import type {
 	ConnectionTestRequestPayload,
 	ConnectionTestResponsePayload,
 	ConnectionTestResultPayload,
 	FrameConnectionTestPayload,
-	SettingsConfigSnapshot,
 } from '../types/index';
 
 
 export default function Configuration() {
-  const [snapshot, setSnapshot] = useState<SettingsConfigSnapshot | null>(null);
-  const [configInitial, setConfigInitial] = useState<ConfigurationResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+  
+  // Use React Query for configuration data
+  const { data: configData, isLoading: loadingConfig } = useQuery({
+    queryKey: ['configuration'],
+    queryFn: api.getConfiguration,
+    retry: 1,
+  });
+
+  // Use React Query for status/snapshot data
+  const { data: statusData, isLoading: loadingStatus } = useQuery({
+    queryKey: ['status'],
+    queryFn: api.getStatus,
+    retry: 1,
+  });
+
+  const snapshot = statusData?.config ?? null;
+  const configInitial = configData ?? null;
+  const loading = loadingConfig || loadingStatus;
+
+  // Mutation for updating configuration
+  const updateConfigMutation = useMutation({
+    mutationFn: api.updateConfiguration,
+    onSuccess: () => {
+      // Invalidate and refetch both queries
+      queryClient.invalidateQueries({ queryKey: ['configuration'] });
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+      setSuccessMessage('Configuration saved');
+      setErrorMessage(null);
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to save configuration');
+      setSuccessMessage(null);
+    },
+  });
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [connectionResult, setConnectionResult] = useState<ConnectionTestResponsePayload | null>(null);
@@ -50,35 +82,6 @@ export default function Configuration() {
     const hasPassword = (configInitial?.hasPassword ?? snapshot?.hasICloudPassword ?? false);
     return username.length > 0 && frameHost.length > 0 && hasPassword;
   }, [configInitial, snapshot]);
-
-  const loadConfiguration = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const [status, config] = await Promise.all([api.getStatus(), api.getConfiguration().catch(() => null)]);
-      if (!status.config) {
-        setSnapshot(null);
-        setErrorMessage('Configuration snapshot is not yet available.');
-      } else {
-        setSnapshot(status.config);
-      }
-
-      if (config) {
-        setConfigInitial(config);
-      }
-    } catch (error: unknown) {
-      setSnapshot(null);
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to load configuration.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadConfiguration();
-  }, [loadConfiguration]);
 
   // the page-level "Run Connection Test" uses stored snapshot/config when available
 
@@ -281,25 +284,11 @@ export default function Configuration() {
             <CardContent>
               <ConfigurationForm
                 initialData={configInitial ?? undefined}
-                isLoading={saving}
+                isLoading={updateConfigMutation.isPending}
                 onSubmit={async (updates: ConfigurationUpdate) => {
-                  setSaving(true);
                   setErrorMessage(null);
                   setSuccessMessage(null);
-                  try {
-                    const updated = await api.updateConfiguration(updates);
-                    // Refresh both snapshot and config
-                    const status = await api.getStatus();
-                    setSnapshot(status.config ?? null);
-                    // snapshot already refreshed from status
-                    setSnapshot(status.config ?? null);
-                    setConfigInitial(updated);
-                    setSuccessMessage('Configuration saved');
-                  } catch (err: unknown) {
-                    setErrorMessage(err instanceof Error ? err.message : 'Failed to save configuration');
-                  } finally {
-                    setSaving(false);
-                  }
+                  await updateConfigMutation.mutateAsync(updates);
                 }}
                 onTestICloud={async (username: string, password: string, sourceAlbum?: string) => {
                   const result = await api.testICloudConnection({ username, password, sourceAlbum });

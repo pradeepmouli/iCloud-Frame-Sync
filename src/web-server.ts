@@ -25,7 +25,6 @@ import type {
 	ManualSyncRequest,
 	PhotoListQuery,
 	PhotoPage,
-	PhotoSummary,
 	SettingsConfigSnapshot,
 	SettingsUpdateRequest,
 	StatusResponse,
@@ -39,6 +38,7 @@ import type {
 	SyncScheduleState,
 	SyncStateStore,
 } from './services/SyncStateStore.js';
+import { SyncStateService } from './services/SyncStateService.js';
 import type { iCloudConfig } from './types/endpoint.js';
 
 export interface WebServerConfig {
@@ -56,6 +56,7 @@ type SchedulerView = Pick<
 	| 'isPausedState'
 	| 'isRunning'
 	| 'start'
+	| 'stop'
 >;
 
 export interface CreateWebServerOptions {
@@ -64,6 +65,7 @@ export interface CreateWebServerOptions {
 	photoSyncService: DashboardSyncService;
 	frameDashboardService: FrameDashboardService;
 	syncScheduler: SchedulerView;
+	syncStateService?: SyncStateService; // optional real-time sync state broadcaster
 	logger?: Logger;
 	createICloudEndpoint?: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
 	connectionTester?: ConnectionTester | null;
@@ -281,6 +283,7 @@ export async function createWebServer(
 		photoSyncService,
 		frameDashboardService,
 		syncScheduler,
+		syncStateService: providedSyncStateService,
 	} = options;
 	const logger = resolveLogger(config, options.logger);
 	const createEndpoint =
@@ -289,6 +292,14 @@ export async function createWebServer(
 			new iCloudEndpoint(endpointConfig, endpointLogger));
 	const connectionTester = options.connectionTester ?? null;
 	const app = express();
+
+	// Initialize SyncStateService (real-time sync status broadcasting)
+	const syncStateService = providedSyncStateService ?? new SyncStateService(logger);
+	try {
+		await syncStateService.initialize();
+	} catch (error) {
+		logger.error({ error }, 'Failed to initialize SyncStateService');
+	}
 
 	app.disable('x-powered-by');
 
@@ -540,6 +551,75 @@ export async function createWebServer(
 		} catch (error) {
 			logger.error({ error }, 'Failed to read status from state store');
 			res.status(500).json({ error: 'Failed to fetch status' });
+		}
+	});
+
+	// --- New Sync Status (User Story 2) ---
+	app.get('/api/sync/status', (_req: Request, res: Response) => {
+		res.json(syncStateService.getState());
+	});
+
+	app.get('/api/sync/status/stream', (req: Request, res: Response) => {
+		// SSE headers
+		res.setHeader('Content-Type', 'text/event-stream');
+		res.setHeader('Cache-Control', 'no-cache');
+		res.setHeader('Connection', 'keep-alive');
+		res.flushHeaders?.();
+
+		// Send initial state
+		const initial = syncStateService.getState();
+		res.write(`event: status\n`);
+		res.write(`data: ${JSON.stringify(initial)}\n\n`);
+
+		const onChange = (event: any) => {
+			res.write(`event: ${event.type}\n`);
+			res.write(`data: ${JSON.stringify(event.state)}\n\n`);
+		};
+
+		syncStateService.on('stateChange', onChange);
+
+		req.on('close', () => {
+			syncStateService.off('stateChange', onChange);
+		});
+	});
+
+	app.post('/api/sync/start', async (_req: Request, res: Response) => {
+		try {
+			if (syncStateService.isRunning()) {
+				res.status(409).json({ error: 'Sync already running' });
+				return;
+			}
+			const snapshot = photoSyncService.getCurrentSettings();
+			if (!snapshot.isConfigured) {
+				res.status(503).json({ error: 'Configuration incomplete', missingFields: snapshot.missingFields });
+				return;
+			}
+			await syncStateService.startSync(0); // totalPhotos unknown until PhotoSyncService runs
+			await syncScheduler.triggerManualSync();
+			res.status(202).json({ accepted: true, status: 'started' });
+		} catch (error) {
+			logger.error({ error }, 'Failed to start sync');
+			res.status(500).json({ error: 'Failed to start sync' });
+		}
+	});
+
+	app.post('/api/sync/stop', async (_req: Request, res: Response) => {
+		try {
+			if (!syncStateService.isRunning()) {
+				res.json({ status: 'idle' });
+				return;
+			}
+			// Attempt to stop scheduler if running
+			if (syncScheduler.isRunning()) {
+				try { await syncScheduler.stop(); } catch (schedulerError) {
+					logger.warn({ error: schedulerError }, 'Failed to stop scheduler gracefully');
+				}
+			}
+			await syncStateService.stopSync();
+			res.json({ status: 'stopped' });
+		} catch (error) {
+			logger.error({ error }, 'Failed to stop sync');
+			res.status(500).json({ error: 'Failed to stop sync' });
 		}
 	});
 

@@ -1,8 +1,8 @@
 # Feature Specification: UI Polish & Persistence Improvements
 
-**Feature Branch**: `002-ui-polish-persistence`  
-**Created**: 2025-11-06  
-**Status**: Draft  
+**Feature Branch**: `002-ui-polish-persistence`
+**Created**: 2025-11-06
+**Status**: Draft
 **Input**: User description: "1. Cleanup, simplify and polish current implementation - User should be able to deploy docker image and use web ui to configure sync process and persist credentials that are used 2. Simplify UI - consolidate redundant widgets (e.g. all configuration should be done on the configuration tab) - Sync screen should be only used for status + start/stop. Separate configuration into sections, iCloud Connection, Frame Connection, Sync configuration 3. Fix other UI issues iCloud browser screen not showing all albums/photos 4. Persist sync state in database e.g. SQLLite"
 
 ## User Scenarios & Testing *(mandatory)*
@@ -74,7 +74,7 @@ A system administrator wants the application to maintain reliable state across r
 1. **Given** application is running sync operations, **When** Docker container is forcibly stopped mid-sync, **Then** on restart, sync resumes from last completed photo without data loss
 2. **Given** sync has processed 1000 photos over multiple sessions, **When** user queries sync history, **Then** all operations are recorded with timestamps, outcomes, and error details
 3. **Given** multiple configuration updates occur rapidly, **When** database writes are triggered, **Then** all changes are persisted atomically without corruption
-4. **Given** application has accumulated 6 months of sync history, **When** database size exceeds 100MB, **Then** old records are automatically archived or purged based on retention policy
+4. **Given** application has accumulated 6 months of sync history, **When** database size exceeds 100MB, **Then** old records are automatically archived or purged based on retention policy (default: keep last 1000 SyncHistory records per photo, configurable via DatabaseMetadata)
 5. **Given** user needs to troubleshoot sync issues, **When** they access database directly or via admin API, **Then** they can query detailed logs of all sync attempts, failures, and retries
 
 ---
@@ -98,7 +98,7 @@ A system administrator wants the application to maintain reliable state across r
 - **FR-002**: Configuration page MUST consolidate all settings into three clearly labeled sections: iCloud Connection, Frame Connection, and Sync Configuration
 - **FR-003**: Configuration page MUST provide "Test Connection" buttons for both iCloud and Frame TV that validate credentials and connectivity before saving
 - **FR-004**: System MUST persist all configuration settings (credentials, IP addresses, sync intervals) to SQLite database automatically on save
-- **FR-005**: System MUST encrypt sensitive credentials (iCloud password, tokens) before storing in database
+- **FR-005**: System MUST encrypt sensitive credentials (iCloud password, session tokens) using AES-256-GCM before storing in database
 - **FR-006**: Dashboard page MUST display only sync status, control buttons (Start/Stop), and real-time progress - no configuration fields
 - **FR-007**: Dashboard MUST show current sync state (idle, running, paused, error), last sync timestamp, photos synced count, and active error messages
 - **FR-008**: Dashboard MUST update status in real-time during sync operations without requiring page refresh
@@ -133,7 +133,7 @@ A system administrator wants the application to maintain reliable state across r
 - **SC-003**: Connection test buttons provide feedback within 5 seconds for both iCloud and Frame TV
 - **SC-004**: Dashboard page updates sync status within 1 second of state changes during active sync
 - **SC-005**: Photo Gallery displays all albums (up to 100) within 5 seconds of page load
-- **SC-006**: Photo Gallery pagination allows browsing albums with 10,000+ photos without performance degradation
+- **SC-006**: Photo Gallery pagination allows browsing albums with 10,000+ photos with <200ms page transition latency and smooth scrolling without frame drops
 - **SC-007**: Configuration settings persist across container restarts with 100% reliability
 - **SC-008**: SQLite database handles 50 concurrent read operations without locking delays
 - **SC-009**: Database schema migrations complete automatically in under 30 seconds for typical datasets
