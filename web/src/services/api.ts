@@ -24,8 +24,10 @@ import type {
 	SettingsUpdateRequest,
 	StatusResponse,
 	SyncAccepted,
+	SyncControlResponse,
 	SyncOperation,
 	SyncScheduleState,
+	SyncStateResponse,
 	SyncStatus,
 	TestFrameRequest,
 	TestICloudRequest,
@@ -336,6 +338,42 @@ class ApiService {
 			method: 'POST',
 			body: JSON.stringify(request),
 		});
+	}
+
+	// ========== Sync Control API (Real-time sync state management) ==========
+
+	/**
+	 * Get current sync state
+	 */
+	async getSyncStatus(): Promise<SyncStateResponse> {
+		return this.request<SyncStateResponse>('/sync/status', {
+			method: 'GET',
+		});
+	}
+
+	/**
+	 * Start a sync operation
+	 */
+	async startSyncOperation(): Promise<SyncControlResponse> {
+		return this.request<SyncControlResponse>('/sync/start', {
+			method: 'POST',
+		});
+	}
+
+	/**
+	 * Stop a running sync operation
+	 */
+	async stopSyncOperation(): Promise<SyncControlResponse> {
+		return this.request<SyncControlResponse>('/sync/stop', {
+			method: 'POST',
+		});
+	}
+
+	/**
+	 * Create EventSource for real-time sync status updates via SSE
+	 */
+	createSyncStatusStream(): EventSource {
+		return new EventSource(`${API_BASE}/sync/status/stream`);
 	}
 }
 
@@ -747,6 +785,6 @@ export type {
 	PhotoPage, PhotoSummary, SettingsConfigSnapshot,
 	SettingsUpdateRequest,
 	StatusResponse,
-	SyncAccepted, SyncOperation,
-	SyncScheduleState, SyncStatus
+	SyncAccepted, SyncControlResponse, SyncOperation,
+	SyncScheduleState, SyncStateResponse, SyncStateStatus, SyncStatus
 } from '../types/index';

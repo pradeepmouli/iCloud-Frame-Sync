@@ -290,3 +290,26 @@ export interface AuthenticateICloudResponse {
 	};
 	error?: string;
 }
+
+// Sync Control API types
+export type SyncStateStatus = 'idle' | 'running' | 'paused' | 'error' | 'completed';
+
+export interface SyncStateResponse {
+	status: SyncStateStatus;
+	currentPhotoId?: string;
+	progressPercent: number;
+	estimatedTimeLeft?: number;
+	photosProcessed: number;
+	photosTotal: number;
+	photosFailed: number;
+	photosSkipped: number;
+	lastError?: string;
+	lastErrorAt?: string;
+	sessionStartedAt?: string;
+	sessionEndedAt?: string;
+}
+
+export interface SyncControlResponse {
+	status: string;
+	message?: string;
+}
