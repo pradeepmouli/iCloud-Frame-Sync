@@ -325,7 +325,7 @@ export class PhotoSyncService {
 					skipped++;
 					// Emit progress update
 					if (this.syncStateService) {
-						await this.syncStateService.updateProgress(processed, failed, skipped);
+						void this.syncStateService.updateProgress(processed, failed, skipped);
 					}
 					continue;
 				}
@@ -338,7 +338,7 @@ export class PhotoSyncService {
 					skipped++;
 					// Emit progress update
 					if (this.syncStateService) {
-						await this.syncStateService.updateProgress(processed, failed, skipped);
+						void this.syncStateService.updateProgress(processed, failed, skipped);
 					}
 					continue;
 				}
@@ -392,7 +392,7 @@ export class PhotoSyncService {
 						
 						// Emit progress update after successful upload
 						if (this.syncStateService) {
-							await this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
+							void this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
 						}
 						break;
 					} catch (error) {

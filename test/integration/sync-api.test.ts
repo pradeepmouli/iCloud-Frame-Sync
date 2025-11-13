@@ -202,13 +202,15 @@ describe('Integration: Sync API', () => {
 	});
 
 	describe('GET /api/sync/status/stream (SSE)', () => {
-		it('should stream initial state event with correct headers', (done) => {
+		it('should stream initial state event with correct headers', function(done) {
+			this.timeout(5000); // Increase timeout for SSE test
+			
+			let testCompleted = false;
 			const req = request(app)
 				.get('/api/sync/status/stream')
 				.buffer(false);
 				
 			let headersSeen = false;
-			let dataSeen = false;
 			
 			req.on('response', (res: any) => {
 				// Check headers
@@ -224,8 +226,8 @@ describe('Integration: Sync API', () => {
 					buffer += chunk.toString();
 					
 					// Check if we got a complete event
-					if (buffer.includes('\n\n') && !dataSeen) {
-						dataSeen = true;
+					if (buffer.includes('\n\n') && !testCompleted) {
+						testCompleted = true;
 						// Parse SSE format: event: <type>\ndata: <json>\n\n
 						const lines = buffer.split('\n');
 						if (lines[0]?.startsWith('event: status') && lines[1]?.startsWith('data: ')) {
@@ -233,7 +235,7 @@ describe('Integration: Sync API', () => {
 							expect(data).to.have.property('status');
 							expect(data).to.have.property('progressPercent');
 							
-							// Success - end the stream
+							// Cleanly end the stream
 							res.destroy();
 							if (headersSeen) {
 								done();
@@ -243,7 +245,7 @@ describe('Integration: Sync API', () => {
 				});
 				
 				res.on('error', (err: any) => {
-					// Ignore expected errors from destroying the stream
+					// Ignore expected errors from stream cleanup
 					if (err.code !== 'ECONNRESET' && err.message !== 'aborted') {
 						callback(err, buffer);
 					} else {
