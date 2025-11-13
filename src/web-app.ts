@@ -43,18 +43,17 @@ async function main(): Promise<void> {
 		const syncStateService = new SyncStateService(logger);
 		await syncStateService.initialize();
 		
-		const application = new Application(appConfig);
+		const application = new Application(appConfig, syncStateService);
 		await application.start();
 
 		const photoSyncService = application.getPhotoSyncService();
 		
-		// Wire up SyncStateService to PhotoSyncService for real-time updates
-		photoSyncService.setSyncStateService(syncStateService);
+		// SyncStateService is now injected before application.start()
+
 		
 		const syncScheduler = application.getSyncScheduler();
 		
-		// Wire up SyncStateService to SyncScheduler for real-time updates
-		syncScheduler.setSyncStateService(syncStateService);
+		// SyncStateService is now injected before application.start()
 		
 		const stateStore = photoSyncService.getStateStore();
 		const frameDashboardService = new FrameDashboardService(
