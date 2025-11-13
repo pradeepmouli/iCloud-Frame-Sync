@@ -15,6 +15,7 @@ import type {
 } from './dashboardTypes.js';
 import { FrameEndpoint } from './FrameEndpoint.js';
 import { iCloudEndpoint } from './iCloudEndpoint.js';
+import type { SyncStateService } from './SyncStateService.js';
 import { SyncStateStore } from './SyncStateStore.js';
 
 export class SetupRequiredError extends Error {
@@ -33,6 +34,7 @@ export interface PhotoSyncServiceOptions {
 	frameEndpoint?: FrameEndpoint;
 	iCloudEndpoint?: iCloudEndpoint;
 	stateStore?: SyncStateStore;
+	syncStateService?: SyncStateService;
 }
 
 interface SyncSummary {
@@ -47,6 +49,7 @@ export class PhotoSyncService {
 	private frameEndpoint: FrameEndpoint;
 	private iCloudEndpoint: iCloudEndpoint;
 	private readonly stateStore: SyncStateStore;
+	private syncStateService?: SyncStateService;
 	private sourceAlbum: string;
 	private readonly maxRetries: number;
 	private readonly baseDelayMs = 500;
@@ -105,6 +108,8 @@ export class PhotoSyncService {
 			options?.stateStore ??
 			new SyncStateStore(this.logger.child({ name: 'StateStore' }));
 
+		this.syncStateService = options?.syncStateService;
+
 		this.refreshCurrentSettings();
 	}
 
@@ -114,6 +119,10 @@ export class PhotoSyncService {
 
 	public get iCloud(): iCloudEndpoint {
 		return this.iCloudEndpoint;
+	}
+
+	public setSyncStateService(syncStateService: SyncStateService): void {
+		this.syncStateService = syncStateService;
 	}
 
 	public isReady(): boolean {
@@ -300,6 +309,11 @@ export class PhotoSyncService {
 				'Fetched photos from iCloud',
 			);
 
+			// Emit sync start to SyncStateService
+			if (this.syncStateService) {
+				await this.syncStateService.startSync(photos.length);
+			}
+
 			for (const photo of photos) {
 				processed++;
 
@@ -309,6 +323,10 @@ export class PhotoSyncService {
 				if (existingState?.status === 'uploaded') {
 					this.logger.debug({ photoId: photo.id, filename: photo.filename }, 'Photo already uploaded, skipping');
 					skipped++;
+					// Emit progress update
+					if (this.syncStateService) {
+						await this.syncStateService.updateProgress(processed, failed, skipped);
+					}
 					continue;
 				}
 
@@ -318,6 +336,10 @@ export class PhotoSyncService {
 						`Photo exceeded max retries (${this.maxRetries}), skipping.`,
 					);
 					skipped++;
+					// Emit progress update
+					if (this.syncStateService) {
+						await this.syncStateService.updateProgress(processed, failed, skipped);
+					}
 					continue;
 				}
 
@@ -367,6 +389,11 @@ export class PhotoSyncService {
 							'Photo uploaded successfully',
 						);
 						success = true;
+						
+						// Emit progress update after successful upload
+						if (this.syncStateService) {
+							await this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
+						}
 						break;
 					} catch (error) {
 						lastError = error instanceof Error ? error.message : String(error);
@@ -382,6 +409,12 @@ export class PhotoSyncService {
 						});
 
 						failed++;
+						
+						// Emit progress update after failure
+						if (this.syncStateService) {
+							await this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
+						}
+						
 						const delayMs = this.baseDelayMs * Math.pow(2, attempt);
 						await new Promise((resolve) => setTimeout(resolve, delayMs));
 					}
@@ -408,10 +441,21 @@ export class PhotoSyncService {
 				'Photo sync completed',
 			);
 
+			// Emit sync completion to SyncStateService
+			if (this.syncStateService) {
+				await this.syncStateService.completeSync(true);
+			}
+
 			return { processed, succeeded, failed, skipped, photoIds: processedPhotoIds };
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			this.logger.error({ albumId: this.sourceAlbum, error: errorMessage }, 'Photo sync failed');
+			
+			// Emit sync failure to SyncStateService
+			if (this.syncStateService) {
+				await this.syncStateService.completeSync(false, errorMessage);
+			}
+			
 			throw error;
 		}
 	}

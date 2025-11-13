@@ -5,6 +5,7 @@ import { createAppConfigFromEnv } from './config/environment.js';
 import { createComponentLogger, createLogger } from './observability/logger.js';
 import { ConnectionTesterService } from './services/ConnectionTester.js';
 import { FrameDashboardService } from './services/FrameDashboardService.js';
+import { SyncStateService } from './services/SyncStateService.js';
 import type { WebServerConfig } from './web-server.js';
 import { createWebServer } from './web-server.js';
 
@@ -36,10 +37,20 @@ process.on('uncaughtException', (error) => {
 async function main(): Promise<void> {
 	try {
 		const appConfig = createAppConfigFromEnv();
+		const logger = createLogger({ level: appConfig.logLevel });
+		
+		// Create SyncStateService early so it can be passed to both Application and web server
+		const syncStateService = new SyncStateService(logger);
+		await syncStateService.initialize();
+		
 		const application = new Application(appConfig);
 		await application.start();
 
 		const photoSyncService = application.getPhotoSyncService();
+		
+		// Wire up SyncStateService to PhotoSyncService for real-time updates
+		photoSyncService.setSyncStateService(syncStateService);
+		
 		const syncScheduler = application.getSyncScheduler();
 		const stateStore = photoSyncService.getStateStore();
 		const frameDashboardService = new FrameDashboardService(
@@ -68,6 +79,7 @@ async function main(): Promise<void> {
 			photoSyncService,
 			frameDashboardService,
 			syncScheduler,
+			syncStateService,
 			logger: webServerLogger,
 			connectionTester,
 		});
