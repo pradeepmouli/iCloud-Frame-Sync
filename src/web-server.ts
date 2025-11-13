@@ -33,12 +33,12 @@ import type {
 import { iCloudEndpoint } from './services/iCloudEndpoint.js';
 import { SetupRequiredError } from './services/PhotoSyncService.js';
 import type { SyncScheduler } from './services/SyncScheduler.js';
+import { SyncStateService } from './services/SyncStateService.js';
 import type {
 	SyncOperationState,
 	SyncScheduleState,
 	SyncStateStore,
 } from './services/SyncStateStore.js';
-import { SyncStateService } from './services/SyncStateService.js';
 import type { iCloudConfig } from './types/endpoint.js';
 
 export interface WebServerConfig {
@@ -647,7 +647,7 @@ export async function createWebServer(
 	app.get('/api/albums', async (req: Request, res: Response) => {
 		const refresh = req.query.refresh === 'true';
 		try {
-			const albums = refresh 
+			const albums = refresh
 				? await photoSyncService.fetchAlbumsFromiCloud()
 				: await photoSyncService.listAlbums();
 			res.json({ albums: albums satisfies AlbumSummary[] });

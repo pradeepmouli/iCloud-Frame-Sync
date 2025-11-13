@@ -28,7 +28,7 @@ import type {
 
 export default function Configuration() {
   const queryClient = useQueryClient();
-  
+
   // Use React Query for configuration data
   const { data: configData, isLoading: loadingConfig } = useQuery({
     queryKey: ['configuration'],

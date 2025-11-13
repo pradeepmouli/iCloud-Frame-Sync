@@ -17,7 +17,7 @@ describe('Integration: Configuration API', () => {
 
 	beforeEach(async () => {
 		sandbox = sinon.createSandbox();
-		
+
 		// Set up test database
 		process.env.DATABASE_URL = `file:${testDbPath}`;
 		process.env.ENCRYPTION_KEY = 'test-encryption-key-32-characters!';

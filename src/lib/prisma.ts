@@ -117,7 +117,7 @@ export async function withTransactionRetry<T>(
 			return await prisma.$transaction(fn);
 		} catch (error) {
 			lastError = error instanceof Error ? error : new Error(String(error));
-			
+
 			// Don't retry on the last attempt
 			if (attempt === maxRetries) {
 				break;
@@ -125,7 +125,7 @@ export async function withTransactionRetry<T>(
 
 			// Check if error is retryable (database locks, deadlocks, etc.)
 			const errorMessage = lastError.message.toLowerCase();
-			const isRetryable = 
+			const isRetryable =
 				errorMessage.includes('lock') ||
 				errorMessage.includes('deadlock') ||
 				errorMessage.includes('busy') ||

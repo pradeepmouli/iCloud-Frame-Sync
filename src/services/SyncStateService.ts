@@ -58,7 +58,7 @@ export class SyncStateService extends EventEmitter {
 	constructor(logger: Logger) {
 		super();
 		this.logger = logger.child({ name: 'SyncStateService' });
-		
+
 		// Initialize with idle state
 		this.currentState = {
 			status: 'idle',
@@ -76,7 +76,7 @@ export class SyncStateService extends EventEmitter {
 	async initialize(): Promise<void> {
 		try {
 			const syncState = await prisma.syncState.findFirst();
-			
+
 			if (syncState) {
 				this.syncStateId = syncState.id;
 				this.currentState = {
@@ -93,7 +93,7 @@ export class SyncStateService extends EventEmitter {
 					sessionStartedAt: syncState.sessionStartedAt ?? undefined,
 					sessionEndedAt: syncState.sessionEndedAt ?? undefined,
 				};
-				
+
 				this.logger.info({ state: this.currentState }, 'Loaded sync state from database');
 			} else {
 				// Create initial state
@@ -128,7 +128,7 @@ export class SyncStateService extends EventEmitter {
 	 */
 	async updateState(updates: Partial<SyncState>): Promise<void> {
 		const previousStatus = this.currentState.status;
-		
+
 		this.currentState = {
 			...this.currentState,
 			...updates,
@@ -155,13 +155,13 @@ export class SyncStateService extends EventEmitter {
 		};
 
 		this.emit('stateChange', event);
-		
+
 		this.logger.debug(
-			{ 
-				previousStatus, 
+			{
+				previousStatus,
 				newStatus: this.currentState.status,
 				eventType,
-			}, 
+			},
 			'Sync state updated'
 		);
 	}
