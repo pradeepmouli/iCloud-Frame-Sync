@@ -412,7 +412,7 @@ export class PhotoSyncService {
 						
 						// Emit progress update after failure
 						if (this.syncStateService) {
-							await this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
+							this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
 						}
 						
 						const delayMs = this.baseDelayMs * Math.pow(2, attempt);
