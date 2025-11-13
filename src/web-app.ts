@@ -52,6 +52,10 @@ async function main(): Promise<void> {
 		photoSyncService.setSyncStateService(syncStateService);
 		
 		const syncScheduler = application.getSyncScheduler();
+		
+		// Wire up SyncStateService to SyncScheduler for real-time updates
+		syncScheduler.setSyncStateService(syncStateService);
+		
 		const stateStore = photoSyncService.getStateStore();
 		const frameDashboardService = new FrameDashboardService(
 			photoSyncService.frame,
