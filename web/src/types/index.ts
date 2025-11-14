@@ -7,6 +7,58 @@ export interface Photo {
 	thumbnailUrl?: string;
 }
 
+// Configuration types (new database-backed configuration)
+export interface ConfigurationResponse {
+	// iCloud Configuration
+	icloudUsername?: string | null;
+	icloudSourceAlbum?: string | null;
+	hasPassword: boolean;
+
+	// Frame Configuration
+	frameHost?: string | null;
+	framePort?: number;
+
+	// Sync Configuration
+	syncInterval?: number;
+	syncEnabled?: boolean;
+	deleteAfterSync?: boolean;
+	maxRetries?: number;
+}
+
+export interface ConfigurationUpdate {
+	// iCloud Configuration (all optional for partial updates)
+	icloudUsername?: string | null;
+	icloudPassword?: string | null;
+	icloudSourceAlbum?: string | null;
+
+	// Frame Configuration
+	frameHost?: string | null;
+	framePort?: number;
+
+	// Sync Configuration
+	syncInterval?: number;
+	syncEnabled?: boolean;
+	deleteAfterSync?: boolean;
+	maxRetries?: number;
+}
+
+export interface TestICloudRequest {
+	username: string;
+	password: string;
+	sourceAlbum?: string;
+}
+
+export interface TestFrameRequest {
+	host: string;
+	port?: number;
+}
+
+export interface ConnectionTestResult {
+	success: boolean;
+	message: string;
+	details?: Record<string, unknown>;
+}
+
 export interface AppStatus {
 	isRunning: boolean;
 	syncStatus: boolean;
@@ -237,4 +289,27 @@ export interface AuthenticateICloudResponse {
 		appleId: string;
 	};
 	error?: string;
+}
+
+// Sync Control API types
+export type SyncStateStatus = 'idle' | 'running' | 'paused' | 'error' | 'completed';
+
+export interface SyncStateResponse {
+	status: SyncStateStatus;
+	currentPhotoId?: string;
+	progressPercent: number;
+	estimatedTimeLeft?: number;
+	photosProcessed: number;
+	photosTotal: number;
+	photosFailed: number;
+	photosSkipped: number;
+	lastError?: string;
+	lastErrorAt?: string;
+	sessionStartedAt?: string;
+	sessionEndedAt?: string;
+}
+
+export interface SyncControlResponse {
+	status: string;
+	message?: string;
 }

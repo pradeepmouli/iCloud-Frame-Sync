@@ -145,6 +145,8 @@ export interface DashboardSyncService {
 	queueManualSync(request: ManualSyncRequest): Promise<SyncAccepted>;
 	listAlbums(): Promise<AlbumSummary[]>;
 	listPhotos(query: PhotoListQuery): Promise<PhotoPage>;
+	fetchAlbumsFromiCloud(): Promise<AlbumSummary[]>;
+	fetchPhotosFromiCloud(query: PhotoListQuery): Promise<PhotoPage>;
 	updateConfiguration(settings: SettingsUpdateRequest): Promise<SettingsConfigSnapshot>;
 	getCurrentSettings(): SettingsConfigSnapshot;
 	isReady(): boolean;

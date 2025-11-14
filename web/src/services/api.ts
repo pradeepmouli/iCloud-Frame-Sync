@@ -2,8 +2,11 @@ import type {
 	AlbumSummary,
 	AppStatus,
 	AuthenticateICloudResponse,
+	ConfigurationResponse,
+	ConfigurationUpdate,
 	ConnectionTestRequestPayload,
 	ConnectionTestResponsePayload,
+	ConnectionTestResult,
 	ConnectionTestResultPayload,
 	FrameArt,
 	FrameArtListQuery,
@@ -21,9 +24,13 @@ import type {
 	SettingsUpdateRequest,
 	StatusResponse,
 	SyncAccepted,
+	SyncControlResponse,
 	SyncOperation,
 	SyncScheduleState,
+	SyncStateResponse,
 	SyncStatus,
+	TestFrameRequest,
+	TestICloudRequest,
 } from '../types/index';
 
 const API_BASE = '/api';
@@ -150,16 +157,18 @@ class ApiService {
 		return normalizeSyncAccepted(response);
 	}
 
-	async listAlbums(): Promise<AlbumSummary[]> {
-		const response = await this.request<unknown>('/albums');
+	async listAlbums(refresh?: boolean): Promise<AlbumSummary[]> {
+		const queryString = refresh ? this.buildQuery({ refresh: 'true' }) : '';
+		const response = await this.request<unknown>(`/albums${queryString}`);
 		return normalizeAlbumCollection(response);
 	}
 
-	async listPhotos(query: PhotoListQuery): Promise<PhotoPage> {
+	async listPhotos(query: PhotoListQuery & { refresh?: boolean }): Promise<PhotoPage> {
 		const queryString = this.buildQuery({
 			albumId: query.albumId,
 			page: query.page,
 			pageSize: query.pageSize,
+			...(query.refresh ? { refresh: 'true' } : {}),
 		});
 		const response = await this.request<unknown>(`/photos${queryString}`);
 		return normalizePhotoPage(response);
@@ -288,6 +297,83 @@ class ApiService {
 			return status.config;
 		}
 		throw new Error('Configuration snapshot is not available yet.');
+	}
+
+	// ========== Configuration API (Database-backed) ==========
+
+	/**
+	 * Get current configuration
+	 */
+	async getConfiguration(): Promise<ConfigurationResponse> {
+		return this.request<ConfigurationResponse>('/configuration', {
+			method: 'GET',
+		});
+	}
+
+	/**
+	 * Update configuration (partial update)
+	 */
+	async updateConfiguration(updates: ConfigurationUpdate): Promise<ConfigurationResponse> {
+		return this.request<ConfigurationResponse>('/configuration', {
+			method: 'POST',
+			body: JSON.stringify(updates),
+		});
+	}
+
+	/**
+	 * Test iCloud connection without saving
+	 */
+	async testICloudConnection(request: TestICloudRequest): Promise<ConnectionTestResult> {
+		return this.request<ConnectionTestResult>('/configuration/test-icloud', {
+			method: 'POST',
+			body: JSON.stringify(request),
+		});
+	}
+
+	/**
+	 * Test Frame TV connection without saving
+	 */
+	async testFrameConnection(request: TestFrameRequest): Promise<ConnectionTestResult> {
+		return this.request<ConnectionTestResult>('/configuration/test-frame', {
+			method: 'POST',
+			body: JSON.stringify(request),
+		});
+	}
+
+	// ========== Sync Control API (Real-time sync state management) ==========
+
+	/**
+	 * Get current sync state
+	 */
+	async getSyncStatus(): Promise<SyncStateResponse> {
+		return this.request<SyncStateResponse>('/sync/status', {
+			method: 'GET',
+		});
+	}
+
+	/**
+	 * Start a sync operation
+	 */
+	async startSyncOperation(): Promise<SyncControlResponse> {
+		return this.request<SyncControlResponse>('/sync/start', {
+			method: 'POST',
+		});
+	}
+
+	/**
+	 * Stop a running sync operation
+	 */
+	async stopSyncOperation(): Promise<SyncControlResponse> {
+		return this.request<SyncControlResponse>('/sync/stop', {
+			method: 'POST',
+		});
+	}
+
+	/**
+	 * Create EventSource for real-time sync status updates via SSE
+	 */
+	createSyncStatusStream(): EventSource {
+		return new EventSource(`${API_BASE}/sync/status/stream`);
 	}
 }
 
@@ -699,6 +785,6 @@ export type {
 	PhotoPage, PhotoSummary, SettingsConfigSnapshot,
 	SettingsUpdateRequest,
 	StatusResponse,
-	SyncAccepted, SyncOperation,
-	SyncScheduleState, SyncStatus
+	SyncAccepted, SyncControlResponse, SyncOperation,
+	SyncScheduleState, SyncStateResponse, SyncStateStatus, SyncStatus
 } from '../types/index';

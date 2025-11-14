@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { Endpoint } from '../types/endpoint.js';
+import type { SyncStateService } from './SyncStateService.js';
 import type { SyncStateStore } from './SyncStateStore.js';
 import { syncPhotosBetweenEndpoints } from './syncUtils.js';
 
@@ -11,6 +12,11 @@ export interface SyncSchedulerConfig {
 	 * If provided, scheduler will persist schedule state and sync operations.
 	 */
 	stateStore?: SyncStateStore;
+	/**
+	 * Optional sync state service for real-time updates.
+	 * If provided, scheduler will emit state changes via EventEmitter for SSE broadcasting.
+	 */
+	syncStateService?: SyncStateService;
 	/**
 	 * Enable jitter (random delay) to prevent thundering herd.
 	 * Adds random delay of 0-20% of interval.
@@ -49,6 +55,7 @@ export class SyncScheduler {
 	private intervalSeconds: number;
 	private endpoints: Endpoint[];
 	private stateStore?: SyncStateStore;
+	private syncStateService?: SyncStateService;
 	private enableJitter: boolean;
 	private minIntervalSeconds: number;
 	private maxBackoffSeconds: number;
@@ -64,6 +71,7 @@ export class SyncScheduler {
 		this.intervalSeconds = config.intervalSeconds;
 		this.endpoints = config.endpoints;
 		this.stateStore = config.stateStore;
+		this.syncStateService = config.syncStateService;
 		this.enableJitter = config.enableJitter ?? true;
 		this.minIntervalSeconds = config.minIntervalSeconds ?? 30;
 		this.maxBackoffSeconds = config.maxBackoffSeconds ?? 300; // 5 minutes
@@ -77,6 +85,14 @@ export class SyncScheduler {
 			);
 			this.intervalSeconds = this.minIntervalSeconds;
 		}
+	}
+
+	/**
+	 * Sets the SyncStateService for real-time state broadcasting.
+	 * Can be called after construction to inject the dependency.
+	 */
+	public setSyncStateService(syncStateService: SyncStateService): void {
+		this.syncStateService = syncStateService;
 	}
 
 	/**

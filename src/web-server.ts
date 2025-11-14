@@ -4,7 +4,14 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { Logger } from 'pino';
 
+import { validateBody } from './lib/validation.js';
 import { createComponentLogger, createLogger } from './observability/logger.js';
+import {
+	ConfigurationUpdateSchema,
+	TestFrameRequestSchema,
+	TestICloudRequestSchema,
+} from './schemas/configuration.schema.js';
+import { configurationService } from './services/ConfigurationService.js';
 import type { ConnectionTester, ConnectionTestResult, FrameConnectionTestRequest, ICloudConnectionTestRequest } from './services/connectionTypes.js';
 import type {
 	AlbumSummary,
@@ -18,7 +25,6 @@ import type {
 	ManualSyncRequest,
 	PhotoListQuery,
 	PhotoPage,
-	PhotoSummary,
 	SettingsConfigSnapshot,
 	SettingsUpdateRequest,
 	StatusResponse,
@@ -27,6 +33,7 @@ import type {
 import { iCloudEndpoint } from './services/iCloudEndpoint.js';
 import { SetupRequiredError } from './services/PhotoSyncService.js';
 import type { SyncScheduler } from './services/SyncScheduler.js';
+import { SyncStateService } from './services/SyncStateService.js';
 import type {
 	SyncOperationState,
 	SyncScheduleState,
@@ -49,6 +56,7 @@ type SchedulerView = Pick<
 	| 'isPausedState'
 	| 'isRunning'
 	| 'start'
+	| 'stop'
 >;
 
 export interface CreateWebServerOptions {
@@ -57,6 +65,7 @@ export interface CreateWebServerOptions {
 	photoSyncService: DashboardSyncService;
 	frameDashboardService: FrameDashboardService;
 	syncScheduler: SchedulerView;
+	syncStateService?: SyncStateService; // optional real-time sync state broadcaster
 	logger?: Logger;
 	createICloudEndpoint?: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
 	connectionTester?: ConnectionTester | null;
@@ -274,6 +283,7 @@ export async function createWebServer(
 		photoSyncService,
 		frameDashboardService,
 		syncScheduler,
+		syncStateService: providedSyncStateService,
 	} = options;
 	const logger = resolveLogger(config, options.logger);
 	const createEndpoint =
@@ -282,6 +292,14 @@ export async function createWebServer(
 			new iCloudEndpoint(endpointConfig, endpointLogger));
 	const connectionTester = options.connectionTester ?? null;
 	const app = express();
+
+	// Initialize SyncStateService (real-time sync status broadcasting)
+	const syncStateService = providedSyncStateService ?? new SyncStateService(logger);
+	try {
+		await syncStateService.initialize();
+	} catch (error) {
+		logger.error({ error }, 'Failed to initialize SyncStateService');
+	}
 
 	app.disable('x-powered-by');
 
@@ -338,6 +356,98 @@ export async function createWebServer(
 			}
 		}
 	};
+
+	// ========== Configuration Endpoints ==========
+
+	/**
+	 * GET /api/configuration
+	 * Retrieve current configuration (sanitized)
+	 */
+	app.get('/api/configuration', async (_req: Request, res: Response) => {
+		try {
+			const configuration = await configurationService.getConfiguration();
+			res.json(configuration);
+		} catch (error) {
+			logger.error({ error }, 'Failed to fetch configuration');
+			res.status(500).json({
+				error: 'Failed to retrieve configuration',
+				message: error instanceof Error ? error.message : 'Unknown error',
+			});
+		}
+	});
+
+	/**
+	 * POST /api/configuration
+	 * Update configuration with validation
+	 */
+	app.post(
+		'/api/configuration',
+		validateBody(ConfigurationUpdateSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const updates = req.body;
+				const configuration = await configurationService.updateConfiguration(updates);
+				res.json(configuration);
+			} catch (error) {
+				logger.error({ error }, 'Failed to update configuration');
+				res.status(500).json({
+					error: 'Failed to update configuration',
+					message: error instanceof Error ? error.message : 'Unknown error',
+				});
+			}
+		},
+	);
+
+	/**
+	 * POST /api/configuration/test-icloud
+	 * Test iCloud connection without saving
+	 */
+	app.post(
+		'/api/configuration/test-icloud',
+		validateBody(TestICloudRequestSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const { username, password, sourceAlbum } = req.body;
+				const result = await configurationService.testICloudConnection(
+					username,
+					password,
+					sourceAlbum,
+				);
+				res.json(result);
+			} catch (error) {
+				logger.error({ error }, 'iCloud connection test failed');
+				res.status(500).json({
+					success: false,
+					message: error instanceof Error ? error.message : 'Connection test failed',
+				});
+			}
+		},
+	);
+
+	/**
+	 * POST /api/configuration/test-frame
+	 * Test Frame TV connection without saving
+	 */
+	app.post(
+		'/api/configuration/test-frame',
+		validateBody(TestFrameRequestSchema),
+		async (req: Request, res: Response) => {
+			try {
+				const { host, port } = req.body;
+				const result = await configurationService.testFrameConnection(host, port);
+				res.json(result);
+			} catch (error) {
+				logger.error({ error }, 'Frame TV connection test failed');
+				res.status(500).json({
+					success: false,
+					message: error instanceof Error ? error.message : 'Connection test failed',
+				});
+			}
+		},
+	);
+
+	// ========== Authentication Endpoints ==========
+
 
 	app.post('/api/auth/icloud', async (req: Request, res: Response) => {
 		pruneExpiredSessions();
@@ -444,6 +554,75 @@ export async function createWebServer(
 		}
 	});
 
+	// --- New Sync Status (User Story 2) ---
+	app.get('/api/sync/status', (_req: Request, res: Response) => {
+		res.json(syncStateService.getState());
+	});
+
+	app.get('/api/sync/status/stream', (req: Request, res: Response) => {
+		// SSE headers
+		res.setHeader('Content-Type', 'text/event-stream');
+		res.setHeader('Cache-Control', 'no-cache');
+		res.setHeader('Connection', 'keep-alive');
+		res.flushHeaders?.();
+
+		// Send initial state
+		const initial = syncStateService.getState();
+		res.write(`event: status\n`);
+		res.write(`data: ${JSON.stringify(initial)}\n\n`);
+
+		const onChange = (event: any) => {
+			res.write(`event: ${event.type}\n`);
+			res.write(`data: ${JSON.stringify(event.state)}\n\n`);
+		};
+
+		syncStateService.on('stateChange', onChange);
+
+		req.on('close', () => {
+			syncStateService.off('stateChange', onChange);
+		});
+	});
+
+	app.post('/api/sync/start', async (_req: Request, res: Response) => {
+		try {
+			if (syncStateService.isRunning()) {
+				res.status(409).json({ error: 'Sync already running' });
+				return;
+			}
+			const snapshot = photoSyncService.getCurrentSettings();
+			if (!snapshot.isConfigured) {
+				res.status(503).json({ error: 'Configuration incomplete', missingFields: snapshot.missingFields });
+				return;
+			}
+			await syncStateService.startSync(0); // totalPhotos unknown until PhotoSyncService runs
+			await syncScheduler.triggerManualSync();
+			res.status(202).json({ accepted: true, status: 'started' });
+		} catch (error) {
+			logger.error({ error }, 'Failed to start sync');
+			res.status(500).json({ error: 'Failed to start sync' });
+		}
+	});
+
+	app.post('/api/sync/stop', async (_req: Request, res: Response) => {
+		try {
+			if (!syncStateService.isRunning()) {
+				res.json({ status: 'idle' });
+				return;
+			}
+			// Attempt to stop scheduler if running
+			if (syncScheduler.isRunning()) {
+				try { await syncScheduler.stop(); } catch (schedulerError) {
+					logger.warn({ error: schedulerError }, 'Failed to stop scheduler gracefully');
+				}
+			}
+			await syncStateService.stopSync();
+			res.json({ status: 'stopped' });
+		} catch (error) {
+			logger.error({ error }, 'Failed to stop sync');
+			res.status(500).json({ error: 'Failed to stop sync' });
+		}
+	});
+
 	app.post('/api/sync', async (req: Request, res: Response) => {
 		try {
 			const manualRequest = extractManualSyncRequest(req.body);
@@ -465,13 +644,20 @@ export async function createWebServer(
 		}
 	});
 
-	app.get('/api/albums', async (_req: Request, res: Response) => {
+	app.get('/api/albums', async (req: Request, res: Response) => {
+		const refresh = req.query.refresh === 'true';
 		try {
-			const albums = await photoSyncService.listAlbums();
+			const albums = refresh
+				? await photoSyncService.fetchAlbumsFromiCloud()
+				: await photoSyncService.listAlbums();
 			res.json({ albums: albums satisfies AlbumSummary[] });
 		} catch (error) {
-			logger.error({ error }, 'Failed to list albums');
-			res.status(500).json({ error: 'Failed to list albums' });
+			logger.error({ error, refresh }, 'Failed to list albums');
+			if (error instanceof SetupRequiredError) {
+				res.status(503).json({ error: error.message });
+			} else {
+				res.status(500).json({ error: 'Failed to list albums' });
+			}
 		}
 	});
 
@@ -484,17 +670,28 @@ export async function createWebServer(
 
 		const page = parsePositiveInteger(req.query.page, 1);
 		const pageSize = parsePositiveInteger(req.query.pageSize, 24);
+		const refresh = req.query.refresh === 'true';
 
 		try {
-			const photoPage = await photoSyncService.listPhotos({
-				albumId,
-				page,
-				pageSize,
-			} satisfies PhotoListQuery);
+			const photoPage = refresh
+				? await photoSyncService.fetchPhotosFromiCloud({
+						albumId,
+						page,
+						pageSize,
+				  } satisfies PhotoListQuery)
+				: await photoSyncService.listPhotos({
+						albumId,
+						page,
+						pageSize,
+				  } satisfies PhotoListQuery);
 			res.json(photoPage satisfies PhotoPage);
 		} catch (error) {
-			logger.error({ error, albumId, page, pageSize }, 'Failed to list photos');
-			res.status(500).json({ error: 'Failed to list photos' });
+			logger.error({ error, albumId, page, pageSize, refresh }, 'Failed to list photos');
+			if (error instanceof SetupRequiredError) {
+				res.status(503).json({ error: error.message });
+			} else {
+				res.status(500).json({ error: 'Failed to list photos' });
+			}
 		}
 	});
 

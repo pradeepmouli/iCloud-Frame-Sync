@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icloud-frame-sync
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data              # SQLite database persistence
+      - ./logs:/app/logs              # Application logs
+      - ~/.icloud-frame-sync:/app/.icloud-frame-sync  # Legacy JSON state for migration
+    environment:
+      - DATABASE_URL=file:/app/data/sync.db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - PORT=3000
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
