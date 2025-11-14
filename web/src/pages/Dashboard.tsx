@@ -3,8 +3,6 @@ import {
     PlayArrow as PlayArrowIcon,
     Refresh as RefreshIcon,
     Settings as SettingsIcon,
-    Stop as StopIcon,
-    Sync as SyncIcon,
     Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
@@ -16,7 +14,6 @@ import {
     Chip,
     CircularProgress,
     Divider,
-    LinearProgress,
     Link,
     Stack,
     Typography,
@@ -24,14 +21,13 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { SyncStatusCard } from '../components/SyncStatusCard';
 import { api } from '../services/api';
 import type { StatusResponse } from '../types/index';
 
 export default function Dashboard() {
 	const [status, setStatus] = useState<StatusResponse | null>(null);
 	const [loading, setLoading] = useState(true);
-	const [syncing, setSyncing] = useState(false);
-	const [stopping, setStopping] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -71,75 +67,8 @@ export default function Dashboard() {
 		loadDashboard();
 	}, [loadDashboard]);
 
-	// Auto-refresh during active sync
-	useEffect(() => {
-		if (status?.sync?.status === 'running') {
-			const interval = setInterval(refreshStatusOnly, 2000);
-			return () => clearInterval(interval);
-		}
-	}, [status?.sync?.status, refreshStatusOnly]);
-
-	const handleStartSync = useCallback(async () => {
-		setSyncing(true);
-		setSuccessMessage(null);
-		setErrorMessage(null);
-
-		try {
-			const accepted = await api.queueManualSync({});
-			await refreshStatusOnly();
-			setSuccessMessage(
-				`Sync started successfully (operation ${accepted.operationId}).`,
-			);
-		} catch (error: unknown) {
-			setErrorMessage(
-				error instanceof Error ? error.message : 'Failed to start sync.',
-			);
-		} finally {
-			setSyncing(false);
-		}
-	}, [refreshStatusOnly]);
-
-	const handleStopSync = useCallback(async () => {
-		setStopping(true);
-		setSuccessMessage(null);
-		setErrorMessage(null);
-
-		try {
-			setSuccessMessage('Stop sync feature coming soon.');
-		} catch (error: unknown) {
-			setErrorMessage(
-				error instanceof Error ? error.message : 'Failed to stop sync.',
-			);
-		} finally {
-			setStopping(false);
-		}
-	}, []);
-
-	const latestOperationStatus = useMemo(() => {
-		if (!status?.sync) {
-			return 'No sync operations yet';
-		}
-		const state = status.sync.status;
-		return state.charAt(0).toUpperCase() + state.slice(1);
-	}, [status]);
-
 	const isConfigured = status?.config?.isConfigured ?? false;
 	const missingFields = status?.config?.missingFields ?? [];
-	const isSyncRunning = status?.sync?.status === 'running';
-	const canStartSync = isConfigured && missingFields.length === 0 && !isSyncRunning;
-
-	const syncProgress = useMemo(() => {
-		if (!status?.sync || !isSyncRunning) {
-			return null;
-		}
-		const total = status.sync.photoIds.length;
-		const completed = 0;
-		return {
-			total,
-			completed,
-			percentage: total > 0 ? (completed / total) * 100 : 0,
-		};
-	}, [status, isSyncRunning]);
 
 	const scheduleInfo = status?.schedule ?? null;
 
@@ -224,89 +153,12 @@ export default function Dashboard() {
 				</Alert>
 			)}
 
-			<Card>
-				<CardContent>
-					<Box
-						sx={{
-							display: 'flex',
-							justifyContent: 'space-between',
-							alignItems: 'center',
-							mb: 2,
-						}}
-					>
-						<Typography variant="h6" component="h2">
-							Sync Control
-						</Typography>
-						<Chip
-							icon={isSyncRunning ? <SyncIcon /> : undefined}
-							label={latestOperationStatus}
-							color={
-								isSyncRunning
-									? 'primary'
-									: status?.sync?.error
-										? 'error'
-										: 'default'
-							}
-							size="medium"
-						/>
-					</Box>
-
-					{isSyncRunning && syncProgress && (
-						<Box sx={{ mb: 3 }}>
-							<Box
-								sx={{
-									display: 'flex',
-									justifyContent: 'space-between',
-									mb: 1,
-								}}
-							>
-								<Typography variant="body2" color="text.secondary">
-									Progress
-								</Typography>
-								<Typography variant="body2" color="text.secondary">
-									{syncProgress.completed} / {syncProgress.total} photos
-								</Typography>
-							</Box>
-							<LinearProgress
-								variant="determinate"
-								value={syncProgress.percentage}
-								sx={{ height: 8, borderRadius: 4 }}
-							/>
-						</Box>
-					)}
-
-					<Box
-						sx={{
-							display: 'flex',
-							gap: 2,
-							justifyContent: 'center',
-						}}
-					>
-						<Button
-							variant="contained"
-							color="primary"
-							size="large"
-							startIcon={<PlayArrowIcon />}
-							onClick={handleStartSync}
-							disabled={!canStartSync || syncing}
-							sx={{ minWidth: 160 }}
-						>
-							{syncing ? 'Starting…' : 'Start Sync'}
-						</Button>
-						<Button
-							variant="outlined"
-							color="secondary"
-							size="large"
-							startIcon={<StopIcon />}
-							onClick={handleStopSync}
-							disabled={!isSyncRunning || stopping}
-							sx={{ minWidth: 160 }}
-						>
-							{stopping ? 'Stopping…' : 'Stop Sync'}
-						</Button>
-					</Box>
-				</CardContent>
-			</Card>
+			<SyncStatusCard
+				isConfigured={isConfigured}
+				missingFields={missingFields}
+				onError={setErrorMessage}
+				onSuccess={setSuccessMessage}
+			/>
 
 			<Box
 				sx={{
