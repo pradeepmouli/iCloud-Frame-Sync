@@ -255,7 +255,7 @@ class ApiService {
 		};
 	}
 
-	async getSyncStatus(): Promise<SyncStatus> {
+	async getLegacySyncStatus(): Promise<SyncStatus> {
 		const status = await this.getStatus();
 		const isRunning = status.schedule ? !status.schedule.isPaused : false;
 		const inProgress = status.sync ? status.sync.status === 'running' && status.sync.completedAt === null : false;

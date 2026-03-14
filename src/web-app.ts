@@ -43,7 +43,7 @@ async function main(): Promise<void> {
 		const syncStateService = new SyncStateService(logger);
 		await syncStateService.initialize();
 		
-		const application = new Application(appConfig, syncStateService);
+		const application = new Application(appConfig);
 		await application.start();
 
 		const photoSyncService = application.getPhotoSyncService();

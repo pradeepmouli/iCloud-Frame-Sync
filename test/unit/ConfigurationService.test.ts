@@ -6,6 +6,7 @@
  * - Password encryption/decryption
  * - Connection testing
  */
+import '../helpers/setup.js';
 import { expect } from 'chai';
 import { afterEach, beforeEach, describe, it } from 'mocha';
 import { decrypt, encrypt } from '../../src/lib/encryption.js';
@@ -32,13 +33,9 @@ describe('ConfigurationService', () => {
 
 			expect(config).to.deep.include({
 				icloudUsername: null,
-				icloudSourceAlbum: null,
+				syncAlbumName: null,
 				frameHost: null,
-				framePort: 8002,
-				syncInterval: 60,
-				syncEnabled: false,
-				deleteAfterSync: true,
-				maxRetries: 3,
+				syncIntervalSeconds: 60,
 				hasPassword: false,
 			});
 		});
@@ -64,13 +61,9 @@ describe('ConfigurationService', () => {
 
 			expect(config).to.deep.include({
 				icloudUsername: 'test@example.com',
-				icloudSourceAlbum: 'Test Album',
+				syncAlbumName: 'Test Album',
 				frameHost: '192.168.1.100',
-				framePort: 8002,
-				syncInterval: 120,
-				syncEnabled: true,
-				deleteAfterSync: false,
-				maxRetries: 5,
+				syncIntervalSeconds: 120,
 				hasPassword: true,
 			});
 
@@ -105,7 +98,7 @@ describe('ConfigurationService', () => {
 				icloudUsername: 'user@example.com',
 				icloudPassword: 'securepass',
 				frameHost: '192.168.1.50',
-				syncInterval: 180,
+				syncIntervalSeconds: 180,
 			};
 
 			const result = await service.updateConfiguration(updates);
@@ -113,7 +106,7 @@ describe('ConfigurationService', () => {
 			expect(result).to.deep.include({
 				icloudUsername: 'user@example.com',
 				frameHost: '192.168.1.50',
-				syncInterval: 180,
+				syncIntervalSeconds: 180,
 				hasPassword: true,
 			});
 			expect(result).to.not.have.property('icloudPassword');
@@ -226,7 +219,7 @@ describe('ConfigurationService', () => {
 			});
 
 			const result = await service.updateConfiguration({
-				icloudPassword: null,
+				icloudPassword: null as any,
 			});
 
 			expect(result.hasPassword).to.equal(false);

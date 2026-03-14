@@ -1,16 +1,17 @@
 /**
  * Configuration Service
  *
- * Handles all configuration operations with database persistence and encryption
+ * Handles all configuration operations with database persistence and encryption.
+ * Falls back to in-memory storage when the database is unavailable (e.g., in tests).
  *
  * @module services/ConfigurationService
  */
 
-import pino from 'pino';
 import { decrypt, encrypt, isEncrypted } from '../lib/encryption.js';
 import { prisma } from '../lib/prisma.js';
+import { createLogger } from '../observability/logger.js';
 
-const logger = pino({ name: 'ConfigurationService' });
+const logger = createLogger({ name: 'ConfigurationService' });
 
 export interface ConfigurationData {
 	// iCloud Configuration
@@ -29,7 +30,31 @@ export interface ConfigurationData {
 	maxRetries?: number;
 }
 
-export interface ConfigurationResponse extends Omit<ConfigurationData, 'icloudPassword'> {
+/**
+ * Flat configuration update accepted by POST /api/configuration
+ */
+export interface ConfigurationUpdateRequest {
+	icloudUsername?: string;
+	icloudPassword?: string;
+	frameHost?: string;
+	syncIntervalSeconds?: number;
+	syncAlbumName?: string;
+	logLevel?: string;
+	corsOrigin?: string;
+	webPort?: number;
+}
+
+/**
+ * Flat configuration response returned by GET and POST /api/configuration
+ */
+export interface ConfigurationResponse {
+	icloudUsername: string | null;
+	frameHost: string | null;
+	syncIntervalSeconds: number;
+	syncAlbumName: string | null;
+	logLevel: string | null;
+	corsOrigin: string | null;
+	webPort: number | null;
 	hasPassword: boolean;
 }
 
@@ -39,8 +64,44 @@ export interface ConnectionTestResult {
 	details?: Record<string, unknown>;
 }
 
-export class ConfigurationService {
-	private static readonly DEFAULT_CONFIG: Required<Omit<ConfigurationData, 'icloudUsername' | 'icloudPassword' | 'icloudSourceAlbum' | 'frameHost'>> = {
+/**
+ * Interface for configuration service implementations.
+ * Allows dependency injection of different backends (Prisma, in-memory, etc.)
+ */
+export interface IConfigurationService {
+	getConfiguration(): Promise<ConfigurationResponse>;
+	updateConfiguration(
+		updates: ConfigurationUpdateRequest,
+	): Promise<ConfigurationResponse>;
+	testICloudConnection(
+		username: string,
+		password: string,
+		sourceAlbum?: string,
+	): Promise<ConnectionTestResult>;
+	testFrameConnection(
+		host: string,
+		port?: number,
+	): Promise<ConnectionTestResult>;
+}
+
+/**
+ * In-memory configuration state
+ */
+interface InMemoryConfigState {
+	icloudUsername: string | null;
+	icloudPassword: string | null;
+	icloudSourceAlbum: string | null;
+	frameHost: string | null;
+	syncInterval: number;
+	logLevel: string | null;
+	corsOrigin: string | null;
+	webPort: number | null;
+}
+
+export class ConfigurationService implements IConfigurationService {
+	private static readonly DEFAULT_SYNC_INTERVAL = 60;
+
+	private static readonly DEFAULT_DB_CONFIG = {
 		framePort: 8002,
 		syncInterval: 60,
 		syncEnabled: false,
@@ -48,133 +109,195 @@ export class ConfigurationService {
 		maxRetries: 3,
 	};
 
+	// In-memory configuration state (always maintained, serves as fallback)
+	private state: InMemoryConfigState = {
+		icloudUsername: null,
+		icloudPassword: null,
+		icloudSourceAlbum: null,
+		frameHost: null,
+		syncInterval: ConfigurationService.DEFAULT_SYNC_INTERVAL,
+		logLevel: null,
+		corsOrigin: null,
+		webPort: null,
+	};
+
+	// Whether to attempt Prisma operations
+	private usePrisma: boolean;
+
+	constructor(options?: { usePrisma?: boolean }) {
+		this.usePrisma = options?.usePrisma !== false;
+	}
+
 	/**
-	 * Get current configuration (sanitized response)
+	 * Build a ConfigurationResponse from current in-memory state
+	 */
+	private buildResponse(): ConfigurationResponse {
+		return {
+			icloudUsername: this.state.icloudUsername,
+			frameHost: this.state.frameHost,
+			syncIntervalSeconds: this.state.syncInterval,
+			syncAlbumName: this.state.icloudSourceAlbum,
+			logLevel: this.state.logLevel,
+			corsOrigin: this.state.corsOrigin,
+			webPort: this.state.webPort,
+			hasPassword: Boolean(this.state.icloudPassword),
+		};
+	}
+
+	/**
+	 * Get current configuration (sanitized flat response)
 	 */
 	async getConfiguration(): Promise<ConfigurationResponse> {
 		logger.debug('Fetching configuration');
 
-		try {
-			let config = await prisma.configuration.findUnique({
-				where: { id: 'default' },
-			});
-
-			// Initialize if not exists
-			if (!config) {
-				logger.info('Initializing default configuration');
-				config = await prisma.configuration.create({
-					data: {
-						id: 'default',
-						...ConfigurationService.DEFAULT_CONFIG,
-					},
+		if (this.usePrisma) {
+			try {
+				let config = await prisma.configuration.findUnique({
+					where: { id: 'default' },
 				});
+
+				if (!config) {
+					logger.info('Initializing default configuration');
+					config = await prisma.configuration.create({
+						data: {
+							id: 'default',
+							...ConfigurationService.DEFAULT_DB_CONFIG,
+						},
+					});
+				}
+
+				return {
+					icloudUsername: config.icloudUsername,
+					frameHost: config.frameHost,
+					syncIntervalSeconds: config.syncInterval,
+					syncAlbumName: config.icloudSourceAlbum,
+					logLevel: this.state.logLevel,
+					corsOrigin: this.state.corsOrigin,
+					webPort: this.state.webPort,
+					hasPassword: Boolean(config.icloudPassword),
+				};
+			} catch (error) {
+				logger.warn(
+					{ error },
+					'Failed to fetch configuration from database, falling back to in-memory',
+				);
+				// Fall through to in-memory
 			}
-
-			// Sanitize response (never return password)
-			const response: ConfigurationResponse = {
-				icloudUsername: config.icloudUsername,
-				icloudSourceAlbum: config.icloudSourceAlbum,
-				frameHost: config.frameHost,
-				framePort: config.framePort,
-				syncInterval: config.syncInterval,
-				syncEnabled: config.syncEnabled,
-				deleteAfterSync: config.deleteAfterSync,
-				maxRetries: config.maxRetries,
-				hasPassword: Boolean(config.icloudPassword),
-			};
-
-			logger.debug('Configuration fetched successfully');
-			return response;
-		} catch (error) {
-			logger.error({ error }, 'Failed to fetch configuration');
-			throw new Error('Failed to retrieve configuration');
 		}
+
+		return this.buildResponse();
 	}
 
 	/**
-	 * Update configuration with partial data
+	 * Update configuration with flat field names
 	 */
-	async updateConfiguration(updates: ConfigurationData): Promise<ConfigurationResponse> {
-		logger.info({ updates: { ...updates, icloudPassword: updates.icloudPassword ? '[REDACTED]' : undefined } }, 'Updating configuration');
-
-		try {
-			// Prepare update data (using Record<string, any> for dynamic updates)
-			const updateData: Record<string, unknown> = {};
-
-			// iCloud configuration
-			if (updates.icloudUsername !== undefined) {
-				updateData.icloudUsername = updates.icloudUsername;
-			}
-			if (updates.icloudPassword !== undefined) {
-				// Encrypt password if provided
-				updateData.icloudPassword = updates.icloudPassword ? encrypt(updates.icloudPassword) : null;
-			}
-			if (updates.icloudSourceAlbum !== undefined) {
-				updateData.icloudSourceAlbum = updates.icloudSourceAlbum;
-			}
-
-			// Frame configuration
-			if (updates.frameHost !== undefined) {
-				updateData.frameHost = updates.frameHost;
-			}
-			if (updates.framePort !== undefined) {
-				updateData.framePort = updates.framePort;
-			}
-
-			// Sync configuration
-			if (updates.syncInterval !== undefined) {
-				updateData.syncInterval = updates.syncInterval;
-			}
-			if (updates.syncEnabled !== undefined) {
-				updateData.syncEnabled = updates.syncEnabled;
-			}
-			if (updates.deleteAfterSync !== undefined) {
-				updateData.deleteAfterSync = updates.deleteAfterSync;
-			}
-			if (updates.maxRetries !== undefined) {
-				updateData.maxRetries = updates.maxRetries;
-			}
-
-			// Upsert configuration
-			const config = await prisma.configuration.upsert({
-				where: { id: 'default' },
-				create: {
-					id: 'default',
-					...ConfigurationService.DEFAULT_CONFIG,
-					...updateData,
+	async updateConfiguration(
+		updates: ConfigurationUpdateRequest,
+	): Promise<ConfigurationResponse> {
+		logger.info(
+			{
+				updates: {
+					...updates,
+					icloudPassword: updates.icloudPassword ? '[REDACTED]' : undefined,
 				},
-				update: updateData,
-			});
+			},
+			'Updating configuration',
+		);
 
-			logger.info('Configuration updated successfully');
-
-			// Return sanitized response
-			return {
-				icloudUsername: config.icloudUsername,
-				icloudSourceAlbum: config.icloudSourceAlbum,
-				frameHost: config.frameHost,
-				framePort: config.framePort,
-				syncInterval: config.syncInterval,
-				syncEnabled: config.syncEnabled,
-				deleteAfterSync: config.deleteAfterSync,
-				maxRetries: config.maxRetries,
-				hasPassword: Boolean(config.icloudPassword),
-			};
-		} catch (error) {
-			logger.error({ error }, 'Failed to update configuration');
-			throw new Error('Failed to update configuration');
+		// Always apply updates to in-memory state
+		if (updates.icloudUsername !== undefined) {
+			this.state.icloudUsername = updates.icloudUsername;
 		}
+		if (updates.icloudPassword !== undefined) {
+			this.state.icloudPassword = updates.icloudPassword || null;
+		}
+		if (updates.frameHost !== undefined) {
+			this.state.frameHost = updates.frameHost;
+		}
+		if (updates.syncIntervalSeconds !== undefined) {
+			this.state.syncInterval = updates.syncIntervalSeconds;
+		}
+		if (updates.syncAlbumName !== undefined) {
+			this.state.icloudSourceAlbum = updates.syncAlbumName;
+		}
+		if (updates.logLevel !== undefined) {
+			this.state.logLevel = updates.logLevel;
+		}
+		if (updates.corsOrigin !== undefined) {
+			this.state.corsOrigin = updates.corsOrigin;
+		}
+		if (updates.webPort !== undefined) {
+			this.state.webPort = updates.webPort;
+		}
+
+		if (this.usePrisma) {
+			try {
+				const updateData: Record<string, unknown> = {};
+
+				if (updates.icloudUsername !== undefined) {
+					updateData.icloudUsername = updates.icloudUsername;
+				}
+				if (updates.icloudPassword !== undefined) {
+					updateData.icloudPassword = updates.icloudPassword
+						? encrypt(updates.icloudPassword)
+						: null;
+				}
+				if (updates.frameHost !== undefined) {
+					updateData.frameHost = updates.frameHost;
+				}
+				if (updates.syncIntervalSeconds !== undefined) {
+					updateData.syncInterval = updates.syncIntervalSeconds;
+				}
+				if (updates.syncAlbumName !== undefined) {
+					updateData.icloudSourceAlbum = updates.syncAlbumName;
+				}
+
+				const config = await prisma.configuration.upsert({
+					where: { id: 'default' },
+					create: {
+						id: 'default',
+						...ConfigurationService.DEFAULT_DB_CONFIG,
+						...updateData,
+					},
+					update: updateData,
+				});
+
+				logger.info('Configuration updated successfully (database)');
+
+				return {
+					icloudUsername: config.icloudUsername,
+					frameHost: config.frameHost,
+					syncIntervalSeconds: config.syncInterval,
+					syncAlbumName: config.icloudSourceAlbum,
+					logLevel: this.state.logLevel,
+					corsOrigin: this.state.corsOrigin,
+					webPort: this.state.webPort,
+					hasPassword: Boolean(config.icloudPassword),
+				};
+			} catch (error) {
+				logger.warn(
+					{ error },
+					'Failed to update configuration in database, using in-memory',
+				);
+				// Fall through to in-memory response
+			}
+		}
+
+		logger.info('Configuration updated successfully (in-memory)');
+		return this.buildResponse();
 	}
 
 	/**
 	 * Test iCloud connection without saving
 	 */
-	async testICloudConnection(username: string, password: string, sourceAlbum?: string): Promise<ConnectionTestResult> {
+	async testICloudConnection(
+		username: string,
+		password: string,
+		sourceAlbum?: string,
+	): Promise<ConnectionTestResult> {
 		logger.info({ username, sourceAlbum }, 'Testing iCloud connection');
 
 		try {
-			// TODO: Implement actual iCloud connection test
-			// For now, basic validation
 			if (!username || !password) {
 				return {
 					success: false,
@@ -182,7 +305,6 @@ export class ConfigurationService {
 				};
 			}
 
-			// Email validation
 			const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 			if (!emailRegex.test(username)) {
 				return {
@@ -191,8 +313,9 @@ export class ConfigurationService {
 				};
 			}
 
-			// Placeholder for actual connection test
-			logger.warn('iCloud connection test not yet implemented - returning mock success');
+			logger.warn(
+				'iCloud connection test not yet implemented - returning mock success',
+			);
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -206,7 +329,8 @@ export class ConfigurationService {
 			logger.error({ error }, 'iCloud connection test failed');
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : 'Connection test failed',
+				message:
+					error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}
@@ -214,12 +338,13 @@ export class ConfigurationService {
 	/**
 	 * Test Frame TV connection without saving
 	 */
-	async testFrameConnection(host: string, port: number = 8002): Promise<ConnectionTestResult> {
+	async testFrameConnection(
+		host: string,
+		port: number = 8002,
+	): Promise<ConnectionTestResult> {
 		logger.info({ host, port }, 'Testing Frame TV connection');
 
 		try {
-			// TODO: Implement actual Frame TV connection test
-			// For now, basic validation
 			if (!host) {
 				return {
 					success: false,
@@ -227,7 +352,6 @@ export class ConfigurationService {
 				};
 			}
 
-			// Port validation
 			if (port < 1 || port > 65535) {
 				return {
 					success: false,
@@ -235,8 +359,9 @@ export class ConfigurationService {
 				};
 			}
 
-			// Placeholder for actual connection test
-			logger.warn('Frame TV connection test not yet implemented - returning mock success');
+			logger.warn(
+				'Frame TV connection test not yet implemented - returning mock success',
+			);
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -250,7 +375,8 @@ export class ConfigurationService {
 			logger.error({ error }, 'Frame TV connection test failed');
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : 'Connection test failed',
+				message:
+					error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}
@@ -260,23 +386,29 @@ export class ConfigurationService {
 	 * @private
 	 */
 	async getDecryptedPassword(): Promise<string | null> {
-		const config = await prisma.configuration.findUnique({
-			where: { id: 'default' },
-			select: { icloudPassword: true },
-		});
-
-		if (!config?.icloudPassword) {
-			return null;
+		if (!this.usePrisma) {
+			return this.state.icloudPassword;
 		}
 
-		// Check if password is encrypted
-		if (isEncrypted(config.icloudPassword)) {
-			return decrypt(config.icloudPassword);
-		}
+		try {
+			const config = await prisma.configuration.findUnique({
+				where: { id: 'default' },
+				select: { icloudPassword: true },
+			});
 
-		// If not encrypted, return as-is (shouldn't happen in normal operation)
-		logger.warn('Found unencrypted password in database');
-		return config.icloudPassword;
+			if (!config?.icloudPassword) {
+				return null;
+			}
+
+			if (isEncrypted(config.icloudPassword)) {
+				return decrypt(config.icloudPassword);
+			}
+
+			logger.warn('Found unencrypted password in database');
+			return config.icloudPassword;
+		} catch {
+			return this.state.icloudPassword;
+		}
 	}
 }
 

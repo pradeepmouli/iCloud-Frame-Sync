@@ -28,23 +28,29 @@ interface JsonState {
 		deleteAfterSync?: boolean;
 		maxRetries?: number;
 	};
-	photos?: Record<string, {
-		filename: string;
-		sourceAlbum: string;
-		sourceAlbumId: string;
-		sourcePhotoId: string;
-		frameContentId?: string;
-		uploaded?: boolean;
-		lastSyncedAt?: string;
-		errorCount?: number;
-		fileSize?: number;
-		captureDate?: string;
-	}>;
-	albums?: Record<string, {
-		name: string;
-		photoCount: number;
-		lastFetchedAt?: string;
-	}>;
+	photos?: Record<
+		string,
+		{
+			filename: string;
+			sourceAlbum: string;
+			sourceAlbumId: string;
+			sourcePhotoId: string;
+			frameContentId?: string;
+			uploaded?: boolean;
+			lastSyncedAt?: string;
+			errorCount?: number;
+			fileSize?: number;
+			captureDate?: string;
+		}
+	>;
+	albums?: Record<
+		string,
+		{
+			name: string;
+			photoCount: number;
+			lastFetchedAt?: string;
+		}
+	>;
 }
 
 async function findJsonStateFile(): Promise<string | null> {
@@ -124,7 +130,9 @@ async function migrateJsonState() {
 			// Migrate albums
 			const albumMap = new Map<string, string>(); // albumId -> database ID
 			if (jsonState.albums) {
-				logger.info(`Migrating ${Object.keys(jsonState.albums).length} albums...`);
+				logger.info(
+					`Migrating ${Object.keys(jsonState.albums).length} albums...`,
+				);
 				for (const [albumId, albumData] of Object.entries(jsonState.albums)) {
 					const album = await tx.album.upsert({
 						where: { albumId },
@@ -132,12 +140,16 @@ async function migrateJsonState() {
 							albumId,
 							name: albumData.name,
 							photoCount: albumData.photoCount || 0,
-							lastFetchedAt: albumData.lastFetchedAt ? new Date(albumData.lastFetchedAt) : null,
+							lastFetchedAt: albumData.lastFetchedAt
+								? new Date(albumData.lastFetchedAt)
+								: null,
 						},
 						update: {
 							name: albumData.name,
 							photoCount: albumData.photoCount || 0,
-							lastFetchedAt: albumData.lastFetchedAt ? new Date(albumData.lastFetchedAt) : null,
+							lastFetchedAt: albumData.lastFetchedAt
+								? new Date(albumData.lastFetchedAt)
+								: null,
 						},
 					});
 					albumMap.set(albumId, album.id);
@@ -147,7 +159,9 @@ async function migrateJsonState() {
 
 			// Migrate photos
 			if (jsonState.photos) {
-				logger.info(`Migrating ${Object.keys(jsonState.photos).length} photos...`);
+				logger.info(
+					`Migrating ${Object.keys(jsonState.photos).length} photos...`,
+				);
 				let migratedCount = 0;
 
 				for (const [checksum, photoData] of Object.entries(jsonState.photos)) {
@@ -178,19 +192,27 @@ async function migrateJsonState() {
 							sourcePhotoId: photoData.sourcePhotoId,
 							frameContentId: photoData.frameContentId,
 							status: photoData.uploaded ? 'synced' : 'pending',
-							lastSyncedAt: photoData.lastSyncedAt ? new Date(photoData.lastSyncedAt) : null,
+							lastSyncedAt: photoData.lastSyncedAt
+								? new Date(photoData.lastSyncedAt)
+								: null,
 							errorCount: photoData.errorCount || 0,
 							fileSize: photoData.fileSize,
-							captureDate: photoData.captureDate ? new Date(photoData.captureDate) : null,
+							captureDate: photoData.captureDate
+								? new Date(photoData.captureDate)
+								: null,
 						},
 						update: {
 							filename: photoData.filename,
 							frameContentId: photoData.frameContentId,
 							status: photoData.uploaded ? 'synced' : 'pending',
-							lastSyncedAt: photoData.lastSyncedAt ? new Date(photoData.lastSyncedAt) : null,
+							lastSyncedAt: photoData.lastSyncedAt
+								? new Date(photoData.lastSyncedAt)
+								: null,
 							errorCount: photoData.errorCount || 0,
 							fileSize: photoData.fileSize,
-							captureDate: photoData.captureDate ? new Date(photoData.captureDate) : null,
+							captureDate: photoData.captureDate
+								? new Date(photoData.captureDate)
+								: null,
 						},
 					});
 

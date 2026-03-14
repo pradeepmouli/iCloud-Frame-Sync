@@ -1,8 +1,14 @@
+/* eslint-disable no-unused-vars */
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 
+import {
+	MfaRequiredError,
+	resolveErrorMessage,
+	safeClose,
+} from '../lib/errors.js';
 import type { FrameConfig, iCloudConfig } from '../types/endpoint.js';
 import type {
 	ConnectionTestResult,
@@ -24,63 +30,56 @@ interface PendingICloudSession {
 
 export interface ConnectionTesterOptions {
 	logger: Logger;
-	createICloudEndpoint?: (_config: iCloudConfig, _logger: Logger) => iCloudEndpoint;
-	createFrameEndpoint?: (_config: FrameConfig, _logger: Logger) => FrameEndpoint;
+	createICloudEndpoint?: (
+		_config: iCloudConfig,
+		_logger: Logger,
+	) => iCloudEndpoint;
+	createFrameEndpoint?: (
+		_config: FrameConfig,
+		_logger: Logger,
+	) => FrameEndpoint;
 	defaultAlbum?: string;
 	dataDirectory?: string;
 	sessionTtlMs?: number;
 }
 
-class MfaRequiredError extends Error {
-	public readonly sessionId: string;
-
-	constructor (sessionId: string) {
-		super('MFA_REQUIRED');
-		this.sessionId = sessionId;
-	}
-}
-
-function resolveErrorMessage(_error: unknown): string {
-	if (_error instanceof Error && typeof _error.message === 'string') {
-		return _error.message;
-	}
-	if (typeof _error === 'string' && _error.trim().length > 0) {
-		return _error.trim();
-	}
-	return 'An unexpected error occurred while testing the connection.';
-}
-
-async function safeClose(endpoint: { close: () => Promise<void>; }): Promise<void> {
-	try {
-		await endpoint.close();
-	} catch (error) {
-		// Swallow close errors to avoid masking original issues.
-	}
-}
-
 export class ConnectionTesterService implements ConnectionTester {
 	private readonly logger: Logger;
-	private readonly createICloudEndpoint: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
-	private readonly createFrameEndpoint: (config: FrameConfig, logger: Logger) => FrameEndpoint;
+	private readonly createICloudEndpoint: (
+		_config: iCloudConfig,
+		_logger: Logger,
+	) => iCloudEndpoint;
+	private readonly createFrameEndpoint: (
+		_config: FrameConfig,
+		_logger: Logger,
+	) => FrameEndpoint;
 	private readonly defaultAlbum: string;
 	private readonly dataDirectory: string;
 	private readonly sessionTtlMs: number;
 	private readonly sessions = new Map<string, PendingICloudSession>();
 
-	constructor (options: ConnectionTesterOptions) {
+	constructor(options: ConnectionTesterOptions) {
 		this.logger = options.logger;
 		this.createICloudEndpoint =
 			options.createICloudEndpoint ??
-			((_config: iCloudConfig, _logger: Logger) => new iCloudEndpoint(_config, _logger));
+			((_config: iCloudConfig, _logger: Logger) =>
+				new iCloudEndpoint(_config, _logger));
 		this.createFrameEndpoint =
 			options.createFrameEndpoint ??
-			((_config: FrameConfig, _logger: Logger) => new FrameEndpoint(_config, _logger));
+			((_config: FrameConfig, _logger: Logger) =>
+				new FrameEndpoint(_config, _logger));
 		this.defaultAlbum = options.defaultAlbum ?? DEFAULT_ICLOUD_ALBUM;
-		this.dataDirectory = options.dataDirectory ?? path.resolve('data', 'connection-tests');
-		this.sessionTtlMs = Math.max(1000, options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS);
+		this.dataDirectory =
+			options.dataDirectory ?? path.resolve('data', 'connection-tests');
+		this.sessionTtlMs = Math.max(
+			1000,
+			options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS,
+		);
 	}
 
-	async testICloudConnection(request: ICloudConnectionTestRequest): Promise<ConnectionTestResult> {
+	async testICloudConnection(
+		request: ICloudConnectionTestRequest,
+	): Promise<ConnectionTestResult> {
 		const username = request.username?.trim();
 		if (!username) {
 			return {
@@ -117,7 +116,9 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 
 		const sessionId = randomUUID();
-		const endpointLogger = this.createChildLogger('iCloudConnectionTest', { username });
+		const endpointLogger = this.createChildLogger('iCloudConnectionTest', {
+			username,
+		});
 		const endpointConfig: iCloudConfig = {
 			username,
 			password,
@@ -150,7 +151,8 @@ export class ConnectionTesterService implements ConnectionTester {
 					requiresMfa: true,
 					sessionId: error.sessionId,
 					status: endpoint.status,
-					message: 'Two-factor authentication required. Enter the verification code sent to your Apple devices.',
+					message:
+						'Two-factor authentication required. Enter the verification code sent to your Apple devices.',
 				};
 			}
 
@@ -165,7 +167,9 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 	}
 
-	async testFrameConnection(request: FrameConnectionTestRequest): Promise<ConnectionTestResult> {
+	async testFrameConnection(
+		request: FrameConnectionTestRequest,
+	): Promise<ConnectionTestResult> {
 		const host = request.host?.trim();
 		if (!host) {
 			return {
@@ -212,7 +216,10 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 	}
 
-	private async verifyICloudMfa(sessionId: string, code: string): Promise<ConnectionTestResult> {
+	private async verifyICloudMfa(
+		sessionId: string,
+		code: string,
+	): Promise<ConnectionTestResult> {
 		const session = this.sessions.get(sessionId);
 		if (!session) {
 			return {
@@ -266,7 +273,10 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 	}
 
-	private mapAccountInfo(endpoint: iCloudEndpoint, username: string): Record<string, unknown> | undefined {
+	private mapAccountInfo(
+		endpoint: iCloudEndpoint,
+		username: string,
+	): Record<string, unknown> | undefined {
 		const fullName = endpoint.accountInfo?.dsInfo?.fullName ?? undefined;
 		if (!fullName && !username) {
 			return undefined;
@@ -277,7 +287,10 @@ export class ConnectionTesterService implements ConnectionTester {
 		};
 	}
 
-	private createChildLogger(name: string, bindings: Record<string, unknown>): Logger {
+	private createChildLogger(
+		name: string,
+		bindings: Record<string, unknown>,
+	): Logger {
 		if (typeof this.logger.child === 'function') {
 			return this.logger.child({ component: name, ...bindings });
 		}

@@ -8,9 +8,10 @@
  */
 
 import crypto from 'node:crypto';
-import pino from 'pino';
 
-const logger = pino({ name: 'encryption' });
+import { createLogger } from '../observability/logger.js';
+
+const logger = createLogger({ name: 'encryption' });
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16; // 128 bits for GCM

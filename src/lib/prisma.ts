@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /**
  * Prisma Client Singleton
  *
@@ -8,9 +9,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import pino from 'pino';
 
-const logger = pino({ name: 'prisma' });
+import { createLogger } from '../observability/logger.js';
+
+const logger = createLogger({ name: 'prisma' });
 
 // Global augmentation for PrismaClient instance
 const globalForPrisma = globalThis as unknown as {
@@ -45,7 +47,10 @@ export const prisma =
 if (process.env.NODE_ENV === 'development') {
 	prisma.$on('query' as never, (e: unknown) => {
 		const event = e as { query: string; duration: number };
-		logger.debug({ query: event.query, duration: event.duration }, 'Prisma query');
+		logger.debug(
+			{ query: event.query, duration: event.duration },
+			'Prisma query',
+		);
 	});
 }
 
@@ -61,9 +66,9 @@ const shutdown = async () => {
 	logger.info('Prisma client disconnected');
 };
 
-process.on('beforeExit', shutdown);
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.once('beforeExit', shutdown);
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
 
 /**
  * Test database connection
@@ -88,7 +93,12 @@ export async function testConnection(): Promise<void> {
  * @returns Promise resolving to function result
  */
 export async function withTransaction<T>(
-	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => Promise<T>
+	fn: (
+		_tx: Omit<
+			PrismaClient,
+			'$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
+		>,
+	) => Promise<T>,
 ): Promise<T> {
 	return prisma.$transaction(fn);
 }
@@ -106,9 +116,14 @@ export async function withTransaction<T>(
  * @throws Error if all retry attempts fail
  */
 export async function withTransactionRetry<T>(
-	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => Promise<T>,
+	fn: (
+		_tx: Omit<
+			PrismaClient,
+			'$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
+		>,
+	) => Promise<T>,
 	maxRetries: number = 3,
-	retryDelay: number = 100
+	retryDelay: number = 100,
 ): Promise<T> {
 	let lastError: Error | undefined;
 
@@ -138,15 +153,20 @@ export async function withTransactionRetry<T>(
 
 			logger.warn(
 				{ attempt: attempt + 1, maxRetries, error: lastError.message },
-				'Transaction failed, retrying...'
+				'Transaction failed, retrying...',
 			);
 
 			// Wait before retrying (exponential backoff)
-			await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, attempt)));
+			await new Promise((resolve) =>
+				setTimeout(resolve, retryDelay * Math.pow(2, attempt)),
+			);
 		}
 	}
 
-	logger.error({ attempts: maxRetries + 1, error: lastError }, 'Transaction failed after all retries');
+	logger.error(
+		{ attempts: maxRetries + 1, error: lastError },
+		'Transaction failed after all retries',
+	);
 	throw lastError;
 }
 
@@ -157,7 +177,7 @@ export async function withTransactionRetry<T>(
  * @returns Promise resolving to array of results
  */
 export async function withAtomicOperations<T extends unknown[]>(
-	...operations: Array<(tx: any) => Promise<unknown>>
+	...operations: Array<(_tx: any) => Promise<unknown>>
 ): Promise<T> {
 	return prisma.$transaction(async (tx) => {
 		const results: unknown[] = [];
@@ -182,17 +202,19 @@ export async function withAtomicOperations<T extends unknown[]>(
  * @returns Promise resolving to updated record
  * @throws Error if version conflict persists after all retries
  */
-export async function withOptimisticLock<T extends { id: string; version?: number }>(
+export async function withOptimisticLock<
+	T extends { id: string; version?: number },
+>(
 	model: keyof PrismaClient,
 	id: string,
-	updateFn: (record: T) => Partial<T>,
-	maxRetries: number = 3
+	updateFn: (_record: T) => Partial<T>,
+	maxRetries: number = 3,
 ): Promise<T> {
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		// Read current version
-		const current = await (prisma[model] as any).findUnique({
+		const current = (await (prisma[model] as any).findUnique({
 			where: { id },
-		}) as T | null;
+		})) as T | null;
 
 		if (!current) {
 			throw new Error(`Record not found: ${String(model)} with id ${id}`);
@@ -203,7 +225,7 @@ export async function withOptimisticLock<T extends { id: string; version?: numbe
 
 		try {
 			// Attempt update with version check
-			const updated = await (prisma[model] as any).update({
+			const updated = (await (prisma[model] as any).update({
 				where: {
 					id,
 					...(currentVersion !== undefined ? { version: currentVersion } : {}),
@@ -212,24 +234,24 @@ export async function withOptimisticLock<T extends { id: string; version?: numbe
 					...updates,
 					version: currentVersion + 1,
 				},
-			}) as T;
+			})) as T;
 
 			return updated;
 		} catch (err) {
 			if (attempt === maxRetries) {
 				const error = err instanceof Error ? err : new Error(String(err));
 				throw new Error(
-					`Optimistic lock conflict after ${maxRetries + 1} attempts for ${String(model)} ${id}: ${error.message}`
+					`Optimistic lock conflict after ${maxRetries + 1} attempts for ${String(model)} ${id}: ${error.message}`,
 				);
 			}
 
 			logger.warn(
 				{ attempt: attempt + 1, maxRetries, model, id },
-				'Optimistic lock conflict, retrying...'
+				'Optimistic lock conflict, retrying...',
 			);
 
 			// Brief delay before retry
-			await new Promise(resolve => setTimeout(resolve, 50));
+			await new Promise((resolve) => setTimeout(resolve, 50));
 		}
 	}
 

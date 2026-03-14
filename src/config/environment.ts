@@ -61,13 +61,20 @@ export function createAppConfigFromEnv(): AppConfig {
 	const frameHost = readRequiredEnv('SAMSUNG_FRAME_HOST');
 
 	// Optional with defaults
-	const iCloudSourceAlbum = getEnvOrDefault('ICLOUD_SOURCE_ALBUM', 'Frame Sync');
-	const iCloudDataDirectory = path.resolve(
-		getEnvOrDefault('ICLOUD_DATA_DIRECTORY', 'data')
+	const iCloudSourceAlbum = getEnvOrDefault(
+		'ICLOUD_SOURCE_ALBUM',
+		'Frame Sync',
 	);
-	const syncIntervalSeconds = Number(getEnvOrDefault('ICLOUD_SYNC_INTERVAL', '60'));
+	const iCloudDataDirectory = path.resolve(
+		getEnvOrDefault('ICLOUD_DATA_DIRECTORY', 'data'),
+	);
+	const syncIntervalSeconds = Number(
+		getEnvOrDefault('ICLOUD_SYNC_INTERVAL', '60'),
+	);
 	const logLevel = getEnvOrDefault('LOG_LEVEL', 'info');
-	const frameVerbosity = Number(getEnvOrDefault('SAMSUNG_FRAME_VERBOSITY', '0'));
+	const frameVerbosity = Number(
+		getEnvOrDefault('SAMSUNG_FRAME_VERBOSITY', '0'),
+	);
 	const webPort = process.env.WEB_PORT ? Number(process.env.WEB_PORT) : 3001;
 	const corsOrigin = getEnvOrDefault('CORS_ORIGIN', 'http://localhost:3000');
 
@@ -97,6 +104,7 @@ export function createAppConfigFromEnv(): AppConfig {
  * Export type-safe config instance
  * Only initialize if required env variables are present (not in test environment)
  */
-export const appConfig = (process.env.NODE_ENV === 'test' || !process.env.ICLOUD_USERNAME)
-	? null as any as AppConfig
-	: createAppConfigFromEnv();
+export const appConfig =
+	process.env.NODE_ENV === 'test' || !process.env.ICLOUD_USERNAME
+		? (null as any as AppConfig)
+		: createAppConfigFromEnv();

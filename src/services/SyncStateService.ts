@@ -54,6 +54,7 @@ export class SyncStateService extends EventEmitter {
 	private currentState: SyncState;
 	private logger: Logger;
 	private syncStateId: string | null = null;
+	private idleResetTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(logger: Logger) {
 		super();
@@ -94,7 +95,10 @@ export class SyncStateService extends EventEmitter {
 					sessionEndedAt: syncState.sessionEndedAt ?? undefined,
 				};
 
-				this.logger.info({ state: this.currentState }, 'Loaded sync state from database');
+				this.logger.info(
+					{ state: this.currentState },
+					'Loaded sync state from database',
+				);
 			} else {
 				// Create initial state
 				const created = await prisma.syncState.create({
@@ -129,6 +133,16 @@ export class SyncStateService extends EventEmitter {
 	async updateState(updates: Partial<SyncState>): Promise<void> {
 		const previousStatus = this.currentState.status;
 
+		// Check if any values actually changed to avoid no-op updates
+		const hasChanges = Object.keys(updates).some((key) => {
+			const k = key as keyof SyncState;
+			return this.currentState[k] !== updates[k];
+		});
+
+		if (!hasChanges) {
+			return;
+		}
+
 		this.currentState = {
 			...this.currentState,
 			...updates,
@@ -162,7 +176,7 @@ export class SyncStateService extends EventEmitter {
 				newStatus: this.currentState.status,
 				eventType,
 			},
-			'Sync state updated'
+			'Sync state updated',
 		);
 	}
 
@@ -191,11 +205,12 @@ export class SyncStateService extends EventEmitter {
 		photosProcessed: number,
 		photosFailed: number = 0,
 		photosSkipped: number = 0,
-		currentPhotoId?: string
+		currentPhotoId?: string,
 	): Promise<void> {
-		const progressPercent = this.currentState.photosTotal > 0
-			? Math.round((photosProcessed / this.currentState.photosTotal) * 100)
-			: 0;
+		const progressPercent =
+			this.currentState.photosTotal > 0
+				? Math.round((photosProcessed / this.currentState.photosTotal) * 100)
+				: 0;
 
 		await this.updateState({
 			photosProcessed,
@@ -219,9 +234,16 @@ export class SyncStateService extends EventEmitter {
 			currentPhotoId: undefined,
 		});
 
-		// Reset to idle after a brief delay
-		setTimeout(async () => {
-			if (this.currentState.status === 'completed' || this.currentState.status === 'error') {
+		// Reset to idle after a brief delay, clearing any previous pending timer
+		if (this.idleResetTimer) {
+			clearTimeout(this.idleResetTimer);
+		}
+		this.idleResetTimer = setTimeout(async () => {
+			this.idleResetTimer = null;
+			if (
+				this.currentState.status === 'completed' ||
+				this.currentState.status === 'error'
+			) {
 				await this.updateState({ status: 'idle' });
 			}
 		}, 3000);

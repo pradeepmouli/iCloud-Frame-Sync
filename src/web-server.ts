@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { Logger } from 'pino';
 
+import { MfaRequiredError, resolveErrorMessage } from './lib/errors.js';
 import { validateBody } from './lib/validation.js';
 import { createComponentLogger, createLogger } from './observability/logger.js';
 import {
@@ -11,7 +12,8 @@ import {
 	TestFrameRequestSchema,
 	TestICloudRequestSchema,
 } from './schemas/configuration.schema.js';
-import { configurationService } from './services/ConfigurationService.js';
+import { ConfigurationService, type IConfigurationService } from './services/ConfigurationService.js';
+import { configurationService as defaultConfigurationService } from './services/ConfigurationService.js';
 import type { ConnectionTester, ConnectionTestResult, FrameConnectionTestRequest, ICloudConnectionTestRequest } from './services/connectionTypes.js';
 import type {
 	AlbumSummary,
@@ -66,6 +68,7 @@ export interface CreateWebServerOptions {
 	frameDashboardService: FrameDashboardService;
 	syncScheduler: SchedulerView;
 	syncStateService?: SyncStateService; // optional real-time sync state broadcaster
+	configurationService?: IConfigurationService; // optional injectable configuration service
 	logger?: Logger;
 	createICloudEndpoint?: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
 	connectionTester?: ConnectionTester | null;
@@ -201,13 +204,23 @@ function extractSettingsUpdate(
 	return update;
 }
 
-class MfaRequiredError extends Error {
-	public readonly sessionId: string;
-
-	constructor (sessionId: string) {
-		super('MFA_REQUIRED');
-		this.sessionId = sessionId;
+function redactSensitiveFields(value: unknown): unknown {
+	if (!value || typeof value !== 'object') return value;
+	const src = value as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(src)) {
+		const key = k.toLowerCase();
+		if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
+			out[k] = '[REDACTED]';
+		} else if (key === 'data' && typeof v === 'string') {
+			out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
+		} else if (typeof v === 'object' && v !== null) {
+			out[k] = redactSensitiveFields(v);
+		} else {
+			out[k] = v;
+		}
 	}
+	return out;
 }
 
 interface PendingAuthSession {
@@ -247,12 +260,6 @@ function isFrameConnectionRequest(
 	return typeof host === 'string' && host.trim().length > 0;
 }
 
-function resolveErrorMessage(error: unknown): string {
-	if (error instanceof Error && typeof error.message === 'string') {
-		return error.message;
-	}
-	return 'Unknown error occurred during connection testing.';
-}
 
 function normalizeICloudRequest(
 	request: ICloudConnectionTestRequest,
@@ -285,6 +292,8 @@ export async function createWebServer(
 		syncScheduler,
 		syncStateService: providedSyncStateService,
 	} = options;
+	const configService: IConfigurationService =
+		options.configurationService ?? defaultConfigurationService;
 	const logger = resolveLogger(config, options.logger);
 	const createEndpoint =
 		options.createICloudEndpoint ??
@@ -315,26 +324,7 @@ export async function createWebServer(
 	app.use((req, res, next) => {
 		const start = Date.now();
 		const requestId = crypto.randomUUID();
-		const redact = (value: unknown): unknown => {
-			if (!value || typeof value !== 'object') return value;
-			const src = value as Record<string, unknown>;
-			const out: Record<string, unknown> = {};
-			for (const [k, v] of Object.entries(src)) {
-				const key = k.toLowerCase();
-				if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
-					out[k] = '[REDACTED]';
-				} else if (key === 'data' && typeof v === 'string') {
-					out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
-				} else if (typeof v === 'object' && v !== null) {
-					out[k] = redact(v);
-				} else {
-					out[k] = v;
-				}
-			}
-			return out;
-		};
-
-		const safeBody = redact(req.body);
+		const safeBody = redactSensitiveFields(req.body);
 		logger.info({ requestId, method: req.method, url: req.originalUrl, body: safeBody }, 'HTTP request');
 
 		res.on('finish', () => {
@@ -365,7 +355,7 @@ export async function createWebServer(
 	 */
 	app.get('/api/configuration', async (_req: Request, res: Response) => {
 		try {
-			const configuration = await configurationService.getConfiguration();
+			const configuration = await configService.getConfiguration();
 			res.json(configuration);
 		} catch (error) {
 			logger.error({ error }, 'Failed to fetch configuration');
@@ -386,7 +376,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const updates = req.body;
-				const configuration = await configurationService.updateConfiguration(updates);
+				const configuration = await configService.updateConfiguration(updates);
 				res.json(configuration);
 			} catch (error) {
 				logger.error({ error }, 'Failed to update configuration');
@@ -408,7 +398,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const { username, password, sourceAlbum } = req.body;
-				const result = await configurationService.testICloudConnection(
+				const result = await configService.testICloudConnection(
 					username,
 					password,
 					sourceAlbum,
@@ -434,7 +424,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const { host, port } = req.body;
-				const result = await configurationService.testFrameConnection(host, port);
+				const result = await configService.testFrameConnection(host, port);
 				res.json(result);
 			} catch (error) {
 				logger.error({ error }, 'Frame TV connection test failed');
