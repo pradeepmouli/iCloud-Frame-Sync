@@ -19,8 +19,12 @@ import {
 const require = createRequire(import.meta.url);
 const serviceRunnerModuleUrl = new URL('./service-runner.js', import.meta.url);
 const compiledServiceRunnerPath = fileURLToPath(serviceRunnerModuleUrl);
-const sourceServiceRunnerPath = compiledServiceRunnerPath.replace(/\.js$/, '.ts');
-const isTestEnvironment = process.env.NODE_ENV === 'test' && process.env.CLI_TEST_MODE !== 'false';
+const sourceServiceRunnerPath = compiledServiceRunnerPath.replace(
+	/\.js$/,
+	'.ts',
+);
+const isTestEnvironment =
+	process.env.NODE_ENV === 'test' && process.env.CLI_TEST_MODE !== 'false';
 
 let cachedTsxCli: string | null = null;
 
@@ -31,7 +35,7 @@ function resolveTsxCli(): string {
 	try {
 		cachedTsxCli = require.resolve('tsx/cli');
 		return cachedTsxCli;
-	} catch (error) {
+	} catch {
 		throw new Error(
 			'Unable to locate tsx runtime. Please install development dependencies or build the project before running the CLI from source.',
 		);
@@ -46,25 +50,23 @@ async function spawnService(): Promise<number> {
 		if (existsSync(sourceServiceRunnerPath)) {
 			return [resolveTsxCli(), sourceServiceRunnerPath];
 		}
-		throw new Error('Unable to resolve service runner entrypoint. Have you run `pnpm run build`?');
+		throw new Error(
+			'Unable to resolve service runner entrypoint. Have you run `pnpm run build`?',
+		);
 	})();
 
 	return await new Promise<number>((resolve, reject) => {
-		const child = spawn(
-			process.execPath,
-			runnerArgs,
-			{
-				detached: true,
-				stdio: 'ignore',
-				env: {
-					...process.env,
-					NODE_ENV: process.env.NODE_ENV ?? 'production',
-				},
+		const child = spawn(process.execPath, runnerArgs, {
+			detached: true,
+			stdio: 'ignore',
+			env: {
+				...process.env,
+				NODE_ENV: process.env.NODE_ENV ?? 'production',
 			},
-		);
+		});
 
 		let settled = false;
-		let confirmationTimer: NodeJS.Timeout | null = null;
+		let confirmationTimer: ReturnType<typeof setTimeout> | null = null;
 
 		const cleanup = () => {
 			if (confirmationTimer) {
@@ -84,13 +86,17 @@ async function spawnService(): Promise<number> {
 			reject(error);
 		};
 
-		const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+		const onExit = (code: number | null, signal: string | null) => {
 			if (settled) {
 				return;
 			}
 			settled = true;
 			cleanup();
-			reject(new Error(`Sync service exited before confirmation (code ${code ?? 'null'}, signal ${signal ?? 'none'})`));
+			reject(
+				new Error(
+					`Sync service exited before confirmation (code ${code ?? 'null'}, signal ${signal ?? 'none'})`,
+				),
+			);
 		};
 
 		child.once('error', onError);
@@ -135,7 +141,11 @@ async function handleStart(): Promise<void> {
 	}
 
 	const pid = await spawnService();
-	await writeRuntime({ pid, startedAt: new Date().toISOString(), mode: 'service' });
+	await writeRuntime({
+		pid,
+		startedAt: new Date().toISOString(),
+		mode: 'service',
+	});
 	console.log(`Sync service started successfully (PID ${pid}).`);
 	console.log(`Runtime metadata stored at ${getRuntimePath()}`);
 }
@@ -148,7 +158,9 @@ async function handleStatus(): Promise<void> {
 	}
 
 	if (runtime.mode === 'mock' || runtime.pid <= 0) {
-		console.log(`Sync service status: running (mock), started at ${runtime.startedAt}.`);
+		console.log(
+			`Sync service status: running (mock), started at ${runtime.startedAt}.`,
+		);
 		return;
 	}
 
@@ -189,7 +201,9 @@ async function handleStop(): Promise<void> {
 
 	if (!isProcessActive(runtime.pid)) {
 		await clearRuntime();
-		console.log('Sync service stopped successfully (stale runtime metadata cleared).');
+		console.log(
+			'Sync service stopped successfully (stale runtime metadata cleared).',
+		);
 		return;
 	}
 
@@ -251,7 +265,10 @@ export function buildCli(): Command {
 			await handleStop();
 		});
 
-	program.addHelpText('after', '\nExamples:\n  icloud-frame-sync sync:start\n  icloud-frame-sync sync:status\n  icloud-frame-sync sync:stop');
+	program.addHelpText(
+		'after',
+		'\nExamples:\n  icloud-frame-sync sync:start\n  icloud-frame-sync sync:status\n  icloud-frame-sync sync:stop',
+	);
 
 	return program;
 }
@@ -291,9 +308,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 }
 
 async function main(): Promise<void> {
-	const entryHref = process.argv[1]
-		? pathToFileURL(process.argv[1]).href
-		: '';
+	const entryHref = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
 	if (import.meta.url === entryHref) {
 		await runCli(process.argv);
 	}

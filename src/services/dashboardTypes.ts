@@ -142,12 +142,14 @@ export interface FramePowerStateResponse {
 }
 
 export interface DashboardSyncService {
-	queueManualSync(request: ManualSyncRequest): Promise<SyncAccepted>;
+	queueManualSync(_request: ManualSyncRequest): Promise<SyncAccepted>;
 	listAlbums(): Promise<AlbumSummary[]>;
-	listPhotos(query: PhotoListQuery): Promise<PhotoPage>;
+	listPhotos(_query: PhotoListQuery): Promise<PhotoPage>;
 	fetchAlbumsFromiCloud(): Promise<AlbumSummary[]>;
-	fetchPhotosFromiCloud(query: PhotoListQuery): Promise<PhotoPage>;
-	updateConfiguration(settings: SettingsUpdateRequest): Promise<SettingsConfigSnapshot>;
+	fetchPhotosFromiCloud(_query: PhotoListQuery): Promise<PhotoPage>;
+	updateConfiguration(
+		_settings: SettingsUpdateRequest,
+	): Promise<SettingsConfigSnapshot>;
 	getCurrentSettings(): SettingsConfigSnapshot;
 	isReady(): boolean;
 	getLastError(): string | null;
@@ -155,11 +157,11 @@ export interface DashboardSyncService {
 
 export interface FrameDashboardService {
 	getStatusSnapshot(): Promise<FrameStatusSnapshot>;
-	setPowerState(action: FramePowerAction): Promise<FramePowerStateResponse>;
-	listArt(query: FrameArtListQuery): Promise<FrameArtPage>;
-	deleteArt(artId: string): Promise<boolean>;
-	uploadArt(request: FrameArtUploadRequest): Promise<FrameArtUploadResult>;
-	getThumbnail(artId: string): Promise<Buffer>;
+	setPowerState(_action: FramePowerAction): Promise<FramePowerStateResponse>;
+	listArt(_query: FrameArtListQuery): Promise<FrameArtPage>;
+	deleteArt(_artId: string): Promise<boolean>;
+	uploadArt(_request: FrameArtUploadRequest): Promise<FrameArtUploadResult>;
+	getThumbnail(_artId: string): Promise<Buffer>;
 }
 
 export type SchedulerSnapshot = SyncScheduleState;

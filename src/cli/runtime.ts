@@ -11,7 +11,7 @@ export interface RuntimeMetadata {
 const runtimeDir = join(homedir(), '.icloud-frame-sync');
 const runtimePath = join(runtimeDir, 'runtime.json');
 
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+function isErrnoException(error: unknown): error is { code?: string } {
 	if (!error || typeof error !== 'object') {
 		return false;
 	}

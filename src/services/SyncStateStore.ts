@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Logger } from 'pino';
 
 /**
@@ -124,7 +124,7 @@ export class SyncStateStore {
 	 * @param logger - Pino logger instance for diagnostics
 	 * @param stateDir - Optional custom state directory (defaults to ~/.icloud-frame-sync)
 	 */
-	constructor (logger: Logger, stateDir?: string) {
+	constructor(logger: Logger, stateDir?: string) {
 		this.logger = logger;
 		this.stateDir = stateDir ?? join(homedir(), '.icloud-frame-sync');
 		this.statePath = join(this.stateDir, 'state.json');
@@ -145,7 +145,10 @@ export class SyncStateStore {
 			// Create default state file if it doesn't exist
 			try {
 				await readFile(this.statePath, 'utf8');
-				this.logger.info({ statePath: this.statePath }, 'Existing state file found');
+				this.logger.info(
+					{ statePath: this.statePath },
+					'Existing state file found',
+				);
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
 					await this.write(DEFAULT_STATE);
@@ -236,7 +239,7 @@ export class SyncStateStore {
 	 * });
 	 * ```
 	 */
-	async update(updater: (state: SyncState) => SyncState): Promise<void> {
+	async update(updater: (_state: SyncState) => SyncState): Promise<void> {
 		const currentState = await this.read();
 		const updatedState = updater(currentState);
 		await this.write(updatedState);
@@ -326,9 +329,7 @@ export class SyncStateStore {
 	 * @param status - The status to filter by
 	 * @returns Array of photo states with matching status
 	 */
-	async getPhotosByStatus(
-		status: PhotoState['status'],
-	): Promise<PhotoState[]> {
+	async getPhotosByStatus(status: PhotoState['status']): Promise<PhotoState[]> {
 		const state = await this.read();
 		return Object.values(state.photos).filter((p) => p.status === status);
 	}

@@ -29,7 +29,8 @@ export interface ConfigurationData {
 	maxRetries?: number;
 }
 
-export interface ConfigurationResponse extends Omit<ConfigurationData, 'icloudPassword'> {
+export interface ConfigurationResponse
+	extends Omit<ConfigurationData, 'icloudPassword'> {
 	hasPassword: boolean;
 }
 
@@ -40,7 +41,12 @@ export interface ConnectionTestResult {
 }
 
 export class ConfigurationService {
-	private static readonly DEFAULT_CONFIG: Required<Omit<ConfigurationData, 'icloudUsername' | 'icloudPassword' | 'icloudSourceAlbum' | 'frameHost'>> = {
+	private static readonly DEFAULT_CONFIG: Required<
+		Omit<
+			ConfigurationData,
+			'icloudUsername' | 'icloudPassword' | 'icloudSourceAlbum' | 'frameHost'
+		>
+	> = {
 		framePort: 8002,
 		syncInterval: 60,
 		syncEnabled: false,
@@ -94,8 +100,18 @@ export class ConfigurationService {
 	/**
 	 * Update configuration with partial data
 	 */
-	async updateConfiguration(updates: ConfigurationData): Promise<ConfigurationResponse> {
-		logger.info({ updates: { ...updates, icloudPassword: updates.icloudPassword ? '[REDACTED]' : undefined } }, 'Updating configuration');
+	async updateConfiguration(
+		updates: ConfigurationData,
+	): Promise<ConfigurationResponse> {
+		logger.info(
+			{
+				updates: {
+					...updates,
+					icloudPassword: updates.icloudPassword ? '[REDACTED]' : undefined,
+				},
+			},
+			'Updating configuration',
+		);
 
 		try {
 			// Prepare update data (using Record<string, any> for dynamic updates)
@@ -107,7 +123,9 @@ export class ConfigurationService {
 			}
 			if (updates.icloudPassword !== undefined) {
 				// Encrypt password if provided
-				updateData.icloudPassword = updates.icloudPassword ? encrypt(updates.icloudPassword) : null;
+				updateData.icloudPassword = updates.icloudPassword
+					? encrypt(updates.icloudPassword)
+					: null;
 			}
 			if (updates.icloudSourceAlbum !== undefined) {
 				updateData.icloudSourceAlbum = updates.icloudSourceAlbum;
@@ -169,7 +187,11 @@ export class ConfigurationService {
 	/**
 	 * Test iCloud connection without saving
 	 */
-	async testICloudConnection(username: string, password: string, sourceAlbum?: string): Promise<ConnectionTestResult> {
+	async testICloudConnection(
+		username: string,
+		password: string,
+		sourceAlbum?: string,
+	): Promise<ConnectionTestResult> {
 		logger.info({ username, sourceAlbum }, 'Testing iCloud connection');
 
 		try {
@@ -192,7 +214,9 @@ export class ConfigurationService {
 			}
 
 			// Placeholder for actual connection test
-			logger.warn('iCloud connection test not yet implemented - returning mock success');
+			logger.warn(
+				'iCloud connection test not yet implemented - returning mock success',
+			);
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -206,7 +230,8 @@ export class ConfigurationService {
 			logger.error({ error }, 'iCloud connection test failed');
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : 'Connection test failed',
+				message:
+					error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}
@@ -214,7 +239,10 @@ export class ConfigurationService {
 	/**
 	 * Test Frame TV connection without saving
 	 */
-	async testFrameConnection(host: string, port: number = 8002): Promise<ConnectionTestResult> {
+	async testFrameConnection(
+		host: string,
+		port: number = 8002,
+	): Promise<ConnectionTestResult> {
 		logger.info({ host, port }, 'Testing Frame TV connection');
 
 		try {
@@ -236,7 +264,9 @@ export class ConfigurationService {
 			}
 
 			// Placeholder for actual connection test
-			logger.warn('Frame TV connection test not yet implemented - returning mock success');
+			logger.warn(
+				'Frame TV connection test not yet implemented - returning mock success',
+			);
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -250,7 +280,8 @@ export class ConfigurationService {
 			logger.error({ error }, 'Frame TV connection test failed');
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : 'Connection test failed',
+				message:
+					error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}

@@ -8,7 +8,10 @@
  * Extract a human-readable message from an unknown error value.
  * Handles Error instances, plain strings, and falls back to a default message.
  */
-export function resolveErrorMessage(error: unknown, fallback = 'An unexpected error occurred.'): string {
+export function resolveErrorMessage(
+	error: unknown,
+	fallback = 'An unexpected error occurred.',
+): string {
 	if (error instanceof Error && typeof error.message === 'string') {
 		return error.message;
 	}
@@ -34,7 +37,9 @@ export class MfaRequiredError extends Error {
 /**
  * Safely close an endpoint, swallowing any errors that occur during close.
  */
-export async function safeClose(endpoint: { close: () => Promise<void> }): Promise<void> {
+export async function safeClose(endpoint: {
+	close: () => Promise<void>;
+}): Promise<void> {
 	try {
 		await endpoint.close();
 	} catch {

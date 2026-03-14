@@ -3,27 +3,22 @@ import type {
 	iCloudPhotoAsset,
 	iCloudPhotosService,
 } from 'icloudjs';
-import iCloudService, * as iCloud from 'icloudjs';
+import iCloudService from 'icloudjs';
 import type { Logger } from 'pino';
 import type { iCloudConfig } from 'types/endpoint.js';
-import type {
-	Album,
-	Endpoint,
-	EndpointConfig,
-	Photo,
-} from '../types/endpoint.js';
+import type { Album, Endpoint, Photo } from '../types/endpoint.js';
 
 import exif from 'exif-reader';
 
 export class iCloudPhoto implements Photo {
 	id: string;
 	filename: string;
-	dimensions: { width: number; height: number; };
+	dimensions: { width: number; height: number };
 	size: number;
 	lastModified: Date; // T009: Track last modified timestamp for incremental sync
 	private readonly asset: iCloudPhotoAsset;
 
-	constructor (asset: iCloudPhotoAsset) {
+	constructor(asset: iCloudPhotoAsset) {
 		this.asset = asset;
 		this.id = asset.id; // fallback to filename as id
 		this.filename = asset.filename;
@@ -40,7 +35,7 @@ export class iCloudPhoto implements Photo {
 			'width' in asset.dimension &&
 			'height' in asset.dimension
 		) {
-			this.dimensions = asset.dimension as { width: number; height: number; };
+			this.dimensions = asset.dimension as { width: number; height: number };
 		} else {
 			this.dimensions = { width: 0, height: 0 };
 		}
@@ -49,7 +44,10 @@ export class iCloudPhoto implements Photo {
 
 		// T009: Extract last modified timestamp
 		// iCloud asset may have dateCreated or dateModified fields
-		const assetDate = (asset as any).dateModified || (asset as any).dateCreated || (asset as any).added;
+		const assetDate =
+			(asset as any).dateModified ||
+			(asset as any).dateCreated ||
+			(asset as any).added;
 		this.lastModified = assetDate ? new Date(assetDate) : new Date();
 	}
 
@@ -107,7 +105,7 @@ export class iCloudPhotoAlbum implements Album {
 	name: string;
 	photos: Promise<iCloudPhoto[]>;
 
-	constructor (album: iCloudPhotoAlbumBase) {
+	constructor(album: iCloudPhotoAlbumBase) {
 		this.id = album.title; // Use album title as ID
 		this.name = album.title;
 		// Get photos as a promise that resolves to iCloudPhoto[]
@@ -135,7 +133,7 @@ export class iCloudEndpoint implements Endpoint {
 		return this.iCloudClient.accountInfo;
 	}
 
-	constructor (config: iCloudConfig, logger: Logger) {
+	constructor(config: iCloudConfig, logger: Logger) {
 		this.config = config;
 		this.logger = logger;
 		this.iCloudClient = new iCloudService.default({
@@ -250,7 +248,7 @@ export class iCloudEndpoint implements Endpoint {
 		}
 	}
 
-	async upload(photo: Photo): Promise<string> {
+	async upload(_photo: Photo): Promise<string> {
 		// iCloud does not support uploading to albums via icloudjs (stub)
 		throw new Error('Upload not implemented for iCloudEndpoint');
 	}
@@ -283,7 +281,10 @@ export class iCloudEndpoint implements Endpoint {
 		albumId: string,
 		lastSyncTimestamp?: string,
 	): Promise<iCloudPhoto[]> {
-		this.logger.debug({ albumId, lastSyncTimestamp }, 'Listing photos from album');
+		this.logger.debug(
+			{ albumId, lastSyncTimestamp },
+			'Listing photos from album',
+		);
 
 		// Get album by ID or name
 		const album = this._albums.get(albumId);
@@ -293,7 +294,7 @@ export class iCloudEndpoint implements Endpoint {
 		}
 
 		// Resolve photos promise
-		const photos = await album.photos as iCloudPhoto[];
+		const photos = (await album.photos) as iCloudPhoto[];
 
 		// Filter by lastSyncTimestamp if provided
 		if (lastSyncTimestamp) {

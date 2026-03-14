@@ -9,7 +9,6 @@ import {
 	type ArtContentItem,
 	type SamsungFrameClientOptions,
 	type SamsungFrameClientType,
-	type ServicesSchema,
 } from 'samsung-frame-connect';
 import type { Endpoint, FrameConfig, Photo } from '../types/endpoint.js';
 import { ThumbnailService } from './ThumbnailService.js';
@@ -17,16 +16,18 @@ import { ThumbnailService } from './ThumbnailService.js';
 export class FramePhoto implements Photo {
 	id: string;
 	filename: string;
-	dimensions: { width: number; height: number; };
+	dimensions: { width: number; height: number };
 	size!: number;
 	private buffer!: Buffer;
-	client: SamsungFrameClientType<{
-		'art-mode': true;
-		device: true;
-		'remote-control': true;
-	}> | undefined = undefined;
+	client:
+		| SamsungFrameClientType<{
+				'art-mode': true;
+				device: true;
+				'remote-control': true;
+		  }>
+		| undefined = undefined;
 
-	constructor (
+	constructor(
 		sourceObj: ArtContentItem,
 
 		client?: SamsungFrameClientType<{
@@ -55,7 +56,7 @@ export class FramePhoto implements Photo {
 		try {
 			const exifData = exif(this.buffer);
 			return exifData;
-		} catch (err) {
+		} catch {
 			// Could not parse EXIF
 			return null;
 		}
@@ -83,12 +84,18 @@ export class FrameEndpoint implements Endpoint {
 			this.wsLogPath = await this.initLogFile(process.env['FRAME_WS_LOG']);
 			this.d2dLogPath = await this.initLogFile(process.env['FRAME_D2D_LOG']);
 		} catch (e) {
-			this.logger.warn({ error: this.extractErrorDetails(e).message }, 'Failed to initialize raw log files');
+			this.logger.warn(
+				{ error: this.extractErrorDetails(e).message },
+				'Failed to initialize raw log files',
+			);
 		}
 	}
 
-	private async initLogFile(envVar: string | undefined): Promise<string | null> {
-		if (!envVar || typeof envVar !== 'string' || envVar.trim().length === 0) return null;
+	private async initLogFile(
+		envVar: string | undefined,
+	): Promise<string | null> {
+		if (!envVar || typeof envVar !== 'string' || envVar.trim().length === 0)
+			return null;
 		const logPath = resolvePath(envVar.trim());
 		await mkdir(dirname(logPath), { recursive: true });
 		await appendFile(logPath, ''); // creates file if it doesn't exist
@@ -119,17 +126,25 @@ export class FrameEndpoint implements Endpoint {
 			const details = this.extractErrorDetails(error);
 			// Attempt a one-time reconnect on common connection errors and retry
 			// But skip if already connecting to avoid "WebSocket is not open: readyState 0" errors
-			if (typeof details.message === 'string' &&
+			if (
+				typeof details.message === 'string' &&
 				(details.message.includes('send') ||
 					details.message.includes('not connected') ||
 					details.message.includes('closed')) &&
-				!details.message.includes('readyState 0')) {
-				this.logger.warn({ error: details.message }, 'Frame client not connected, attempting reconnect...');
+				!details.message.includes('readyState 0')
+			) {
+				this.logger.warn(
+					{ error: details.message },
+					'Frame client not connected, attempting reconnect...',
+				);
 				try {
 					await this.client.connect();
 					return await op();
 				} catch (reconnectError) {
-					this.logger.error({ error: this.extractErrorDetails(reconnectError).message }, 'Reconnect attempt failed');
+					this.logger.error(
+						{ error: this.extractErrorDetails(reconnectError).message },
+						'Reconnect attempt failed',
+					);
 					throw reconnectError;
 				}
 			}
@@ -137,7 +152,7 @@ export class FrameEndpoint implements Endpoint {
 		}
 	}
 
-	constructor (config: FrameConfig, logger: Logger) {
+	constructor(config: FrameConfig, logger: Logger) {
 		this.logger = logger;
 		this.client = new SamsungFrameClient({
 			host: config.host,
@@ -152,60 +167,77 @@ export class FrameEndpoint implements Endpoint {
 		this.thumbnailService = new ThumbnailService(cacheDir, logger);
 
 		// Initialize optional raw loggers and instrument ALL WebSocket activity
-		void this.initRawLoggers().then(() => {
-			// Hook into the underlying WebSocket to capture ALL traffic
-			this.instrumentWebSocket();
+		void this.initRawLoggers()
+			.then(() => {
+				// Hook into the underlying WebSocket to capture ALL traffic
+				this.instrumentWebSocket();
 
-			// Wrap client.request for method-level context
-			const originalRequest = (this.client.request as ((payload: any) => Promise<any>) | undefined)?.bind(this.client);
-			if (originalRequest) {
-				(this.client.request as any) = async (payload: any) => {
-					const rid = payload?.request_id || payload?.id || this.generateUUID();
-					await this.rawWsLog(`CALL request() ${rid} ${JSON.stringify(payload)}`);
-					const start = Date.now();
-					try {
-						const resp = await originalRequest(payload);
-						await this.rawWsLog(`RETURN request() ${rid} +${Date.now() - start}ms ${JSON.stringify(resp)}`);
-						return resp;
-					} catch (err) {
-						await this.rawWsLog(`ERROR request() ${rid} +${Date.now() - start}ms ${this.extractErrorDetails(err).message}`);
-						throw err;
-					}
-				};
-			}
+				// Wrap client.request for method-level context
+				const originalRequest = (
+					this.client.request as ((payload: any) => Promise<any>) | undefined
+				)?.bind(this.client);
+				if (originalRequest) {
+					(this.client.request as any) = async (payload: any) => {
+						const rid =
+							payload?.request_id || payload?.id || this.generateUUID();
+						await this.rawWsLog(
+							`CALL request() ${rid} ${JSON.stringify(payload)}`,
+						);
+						const start = Date.now();
+						try {
+							const resp = await originalRequest(payload);
+							await this.rawWsLog(
+								`RETURN request() ${rid} +${Date.now() - start}ms ${JSON.stringify(resp)}`,
+							);
+							return resp;
+						} catch (err) {
+							await this.rawWsLog(
+								`ERROR request() ${rid} +${Date.now() - start}ms ${this.extractErrorDetails(err).message}`,
+							);
+							throw err;
+						}
+					};
+				}
 
-			// Wrap getThumbnail
-			const originalGetThumbnail = (this.client.getThumbnail as ((contentId: string) => Promise<Buffer>) | undefined)?.bind(this.client);
-			if (originalGetThumbnail) {
-				(this.client.getThumbnail as any) = async (contentId: string) => {
-					await this.rawWsLog(`CALL getThumbnail() contentId=${contentId}`);
-					const start = Date.now();
-					try {
-						const result = await originalGetThumbnail(contentId);
-						await this.rawWsLog(`RETURN getThumbnail() contentId=${contentId} +${Date.now() - start}ms bytes=${result.length}`);
-						return result;
-					} catch (err) {
-						const msg = this.extractErrorDetails(err).message;
-						await this.rawWsLog(`ERROR getThumbnail() contentId=${contentId} +${Date.now() - start}ms ${msg}`);
-						throw err;
-					}
-				};
-			}
+				// Wrap getThumbnail
+				const originalGetThumbnail = (
+					this.client.getThumbnail as
+						| ((contentId: string) => Promise<Buffer>)
+						| undefined
+				)?.bind(this.client);
+				if (originalGetThumbnail) {
+					(this.client.getThumbnail as any) = async (contentId: string) => {
+						await this.rawWsLog(`CALL getThumbnail() contentId=${contentId}`);
+						const start = Date.now();
+						try {
+							const result = await originalGetThumbnail(contentId);
+							await this.rawWsLog(
+								`RETURN getThumbnail() contentId=${contentId} +${Date.now() - start}ms bytes=${result.length}`,
+							);
+							return result;
+						} catch (err) {
+							const msg = this.extractErrorDetails(err).message;
+							await this.rawWsLog(
+								`ERROR getThumbnail() contentId=${contentId} +${Date.now() - start}ms ${msg}`,
+							);
+							throw err;
+						}
+					};
+				}
 
-			// Wrap other key methods
-			this.wrapClientMethod('getAvailableArt');
-			this.wrapClientMethod('getCurrentArt');
-			this.wrapClientMethod('getDeviceInfo');
-			this.wrapClientMethod('isOn');
-			this.wrapClientMethod('inArtMode');
-		}).catch(() => undefined);
+				// Wrap other key methods
+				this.wrapClientMethod('getAvailableArt');
+				this.wrapClientMethod('getCurrentArt');
+				this.wrapClientMethod('getDeviceInfo');
+				this.wrapClientMethod('isOn');
+				this.wrapClientMethod('inArtMode');
+			})
+			.catch(() => undefined);
 	}
 
 	private instrumentWebSocket(): void {
 		try {
 			// Access internal connection object
-			const clientAny = this.client as any;
-
 			// Try to hook into the connection after it's established
 			const originalConnect = this.client.connect?.bind(this.client);
 			if (originalConnect) {
@@ -217,8 +249,10 @@ export class FrameEndpoint implements Endpoint {
 
 			// Also try immediate hook in case already connected
 			setTimeout(() => this.hookWebSocketEvents(), 100);
-		} catch (e) {
-			this.logger.debug('Could not instrument WebSocket (will capture via method wrappers)');
+		} catch {
+			this.logger.debug(
+				'Could not instrument WebSocket (will capture via method wrappers)',
+			);
 		}
 	}
 
@@ -238,7 +272,9 @@ export class FrameEndpoint implements Endpoint {
 				// Capture all incoming messages
 				const originalMessageHandler = socket.onmessage;
 				socket.onmessage = (event: any) => {
-					void this.rawWsLog(`WS << ${typeof event.data === 'string' ? event.data : `[binary ${event.data?.length || 0} bytes]`}`);
+					void this.rawWsLog(
+						`WS << ${typeof event.data === 'string' ? event.data : `[binary ${event.data?.length || 0} bytes]`}`,
+					);
 					if (originalMessageHandler) {
 						originalMessageHandler.call(socket, event);
 					}
@@ -248,7 +284,9 @@ export class FrameEndpoint implements Endpoint {
 				const originalSend = socket.send?.bind(socket);
 				if (originalSend) {
 					socket.send = (data: any) => {
-						void this.rawWsLog(`WS >> ${typeof data === 'string' ? data : `[binary ${data?.length || 0} bytes]`}`);
+						void this.rawWsLog(
+							`WS >> ${typeof data === 'string' ? data : `[binary ${data?.length || 0} bytes]`}`,
+						);
 						return originalSend(data);
 					};
 				}
@@ -259,7 +297,9 @@ export class FrameEndpoint implements Endpoint {
 				});
 
 				socket.addEventListener?.('close', (event: any) => {
-					void this.rawWsLog(`WS CLOSE code=${event.code} reason=${event.reason || 'none'}`);
+					void this.rawWsLog(
+						`WS CLOSE code=${event.code} reason=${event.reason || 'none'}`,
+					);
 				});
 
 				this.logger.debug('WebSocket instrumentation hooked successfully');
@@ -274,15 +314,24 @@ export class FrameEndpoint implements Endpoint {
 		if (typeof method === 'function') {
 			const original = method.bind(this.client);
 			(this.client as any)[methodName] = async (...args: any[]) => {
-				await this.rawWsLog(`CALL ${methodName}(${args.map(a => JSON.stringify(a).substring(0, 50)).join(', ')})`);
+				await this.rawWsLog(
+					`CALL ${methodName}(${args.map((a) => JSON.stringify(a).substring(0, 50)).join(', ')})`,
+				);
 				const start = Date.now();
 				try {
 					const result = await original(...args);
-					const resultStr = typeof result === 'object' ? JSON.stringify(result).substring(0, 100) : String(result);
-					await this.rawWsLog(`RETURN ${methodName}() +${Date.now() - start}ms ${resultStr}`);
+					const resultStr =
+						typeof result === 'object'
+							? JSON.stringify(result).substring(0, 100)
+							: String(result);
+					await this.rawWsLog(
+						`RETURN ${methodName}() +${Date.now() - start}ms ${resultStr}`,
+					);
 					return result;
 				} catch (err) {
-					await this.rawWsLog(`ERROR ${methodName}() +${Date.now() - start}ms ${this.extractErrorDetails(err).message}`);
+					await this.rawWsLog(
+						`ERROR ${methodName}() +${Date.now() - start}ms ${this.extractErrorDetails(err).message}`,
+					);
 					throw err;
 				}
 			};
@@ -371,9 +420,10 @@ export class FrameEndpoint implements Endpoint {
 			return '.jpg';
 		})();
 
-		const filename = options.filename && options.filename.trim().length > 0
-			? options.filename
-			: `frame-upload-${Date.now()}${inferredExtension}`;
+		const filename =
+			options.filename && options.filename.trim().length > 0
+				? options.filename
+				: `frame-upload-${Date.now()}${inferredExtension}`;
 
 		const photo: Photo = {
 			id: filename,
@@ -400,14 +450,17 @@ export class FrameEndpoint implements Endpoint {
 		if (this.initialized) return;
 
 		this.logger.info('Initializing Samsung Frame Endpoint...');
-		
+
 		// Initialize thumbnail service cache directory
 		try {
 			await this.thumbnailService.initialize();
 		} catch (error) {
-			this.logger.warn({ error }, 'Failed to initialize thumbnail service, continuing anyway');
+			this.logger.warn(
+				{ error },
+				'Failed to initialize thumbnail service, continuing anyway',
+			);
 		}
-		
+
 		this.logger.info(`Connecting to Samsung Frame at ${this.config.host}...`);
 		try {
 			await this.client.connect();
@@ -417,15 +470,22 @@ export class FrameEndpoint implements Endpoint {
 				const deviceInfo = await this.client.getDeviceInfo();
 				this.logger.info(`Device Info: ${JSON.stringify(deviceInfo, null, 2)}`);
 			} catch (infoError) {
-				this.logger.warn({ error: this.extractErrorDetails(infoError).message }, 'Failed to retrieve device info during initialization');
+				this.logger.warn(
+					{ error: this.extractErrorDetails(infoError).message },
+					'Failed to retrieve device info during initialization',
+				);
 			}
 			// Try to prime art mode and available art information
 			try {
-				const artModeInfo = await this.withClient(() => this.client.getArtModeInfo());
+				const artModeInfo = await this.withClient(() =>
+					this.client.getArtModeInfo(),
+				);
 				this.logger.info(
 					`Art Mode Info: ${JSON.stringify(artModeInfo, null, 2)}`,
 				);
-				const availableArt = await this.withClient(() => this.client.getAvailableArt());
+				const availableArt = await this.withClient(() =>
+					this.client.getAvailableArt(),
+				);
 				this.logger.info(
 					`Available Art: ${JSON.stringify(availableArt, null, 2)}`,
 				);
@@ -442,7 +502,9 @@ export class FrameEndpoint implements Endpoint {
 			this.logger.error(
 				`Error initializing Samsung Frame Endpoint (connect): ${errorDetails.message}`,
 			);
-			this.logger.error(`Initialization error details: ${errorDetails.details}`);
+			this.logger.error(
+				`Initialization error details: ${errorDetails.details}`,
+			);
 			throw connectError;
 		}
 	}
@@ -470,7 +532,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async getAvailableArtByCategory(
 		category?: string,
-		timeout: number = 4,
+		_timeout = 4,
 	): Promise<ArtContentItem[]> {
 		try {
 			const response = await this.client.request({
@@ -499,26 +561,34 @@ export class FrameEndpoint implements Endpoint {
 			await this.rawD2DLog(`THUMBNAIL start id=${photoId}`);
 
 			// Check if this is a user-uploaded photo (MY-* prefix)
-			const isUserPhoto = photoId.startsWith('MY_') || photoId.startsWith('MY-');
-			
+			const isUserPhoto =
+				photoId.startsWith('MY_') || photoId.startsWith('MY-');
+
 			if (isUserPhoto) {
 				// For user photos, use server-side thumbnail generation
-				this.logger.debug(`Generating server-side thumbnail for user photo: ${photoId}`);
+				this.logger.debug(
+					`Generating server-side thumbnail for user photo: ${photoId}`,
+				);
 				await this.rawD2DLog(`THUMBNAIL servergen id=${photoId}`);
-				
+
 				try {
 					// First check cache
-					const cached = await this.thumbnailService.getCachedThumbnail(photoId);
+					const cached =
+						await this.thumbnailService.getCachedThumbnail(photoId);
 					if (cached) {
 						this.logger.debug(`Cache hit for thumbnail: ${photoId}`);
-						await this.rawD2DLog(`THUMBNAIL cache-hit id=${photoId} bytes=${cached.length}`);
+						await this.rawD2DLog(
+							`THUMBNAIL cache-hit id=${photoId} bytes=${cached.length}`,
+						);
 						return cached;
 					}
 
 					// Download full image from Frame TV
-					this.logger.debug(`Downloading full image for ${photoId} to generate thumbnail`);
+					this.logger.debug(
+						`Downloading full image for ${photoId} to generate thumbnail`,
+					);
 					const fullImageBuffer = await this.downloadFullImage(photoId);
-					
+
 					if (!fullImageBuffer || fullImageBuffer.length === 0) {
 						this.logger.warn(`Failed to download full image for ${photoId}`);
 						await this.rawD2DLog(`THUMBNAIL download-failed id=${photoId}`);
@@ -529,35 +599,51 @@ export class FrameEndpoint implements Endpoint {
 					const thumbnail = await this.thumbnailService.generateThumbnail(
 						fullImageBuffer,
 						photoId,
-						{ width: 300, height: 300, fit: 'cover', quality: 80 }
+						{ width: 300, height: 300, fit: 'cover', quality: 80 },
 					);
-					
-					this.logger.debug(`Generated thumbnail for ${photoId}, size: ${thumbnail.length} bytes`);
-					await this.rawD2DLog(`THUMBNAIL servergen-success id=${photoId} bytes=${thumbnail.length}`);
+
+					this.logger.debug(
+						`Generated thumbnail for ${photoId}, size: ${thumbnail.length} bytes`,
+					);
+					await this.rawD2DLog(
+						`THUMBNAIL servergen-success id=${photoId} bytes=${thumbnail.length}`,
+					);
 					return thumbnail;
 				} catch (genError) {
 					const errorDetails = this.extractErrorDetails(genError);
-					this.logger.error(`Failed to generate thumbnail for ${photoId}: ${errorDetails.message}`);
-					await this.rawD2DLog(`THUMBNAIL servergen-error id=${photoId} msg=${errorDetails.message}`);
+					this.logger.error(
+						`Failed to generate thumbnail for ${photoId}: ${errorDetails.message}`,
+					);
+					await this.rawD2DLog(
+						`THUMBNAIL servergen-error id=${photoId} msg=${errorDetails.message}`,
+					);
 					return Buffer.alloc(0);
 				}
 			}
 
 			// For Samsung Store art (SAM-*), try WebSocket + d2d socket method
-			this.logger.debug(`Using WebSocket method for Samsung Store art: ${photoId}`);
-			
+			this.logger.debug(
+				`Using WebSocket method for Samsung Store art: ${photoId}`,
+			);
+
 			// Use the new getThumbnail method from samsung-frame-connect library
 			// which properly implements d2d socket-based thumbnail retrieval
 			const maxRetries = 2;
 			for (let attempt = 0; attempt < maxRetries; attempt++) {
 				try {
-					this.logger.debug(`Thumbnail attempt ${attempt + 1}/${maxRetries} for ${photoId}`);
-					await this.rawD2DLog(`THUMBNAIL attempt ${attempt + 1}/${maxRetries} id=${photoId}`);
+					this.logger.debug(
+						`Thumbnail attempt ${attempt + 1}/${maxRetries} for ${photoId}`,
+					);
+					await this.rawD2DLog(
+						`THUMBNAIL attempt ${attempt + 1}/${maxRetries} id=${photoId}`,
+					);
 
 					// Serialize thumbnail requests at the server to avoid interleaving WS events
 					const thumbnailData = await this.withThumbnailLock(async () => {
 						await this.rawD2DLog(`THUMBNAIL locked id=${photoId}`);
-						const data = await this.withClient(() => this.client.getThumbnail!(photoId));
+						const data = await this.withClient(() =>
+							this.client.getThumbnail!(photoId),
+						);
 						return data;
 					});
 
@@ -565,12 +651,16 @@ export class FrameEndpoint implements Endpoint {
 						this.logger.debug(
 							`Successfully retrieved thumbnail for ${photoId}, size: ${thumbnailData.length} bytes`,
 						);
-						await this.rawD2DLog(`THUMBNAIL success id=${photoId} bytes=${thumbnailData.length}`);
+						await this.rawD2DLog(
+							`THUMBNAIL success id=${photoId} bytes=${thumbnailData.length}`,
+						);
 						return thumbnailData;
 					}
 				} catch (socketError) {
 					const errorDetails = this.extractErrorDetails(socketError);
-					await this.rawD2DLog(`THUMBNAIL error id=${photoId} msg=${errorDetails.message}`);
+					await this.rawD2DLog(
+						`THUMBNAIL error id=${photoId} msg=${errorDetails.message}`,
+					);
 
 					// Check if this is an abort error and if we should retry
 					const isAbortError = errorDetails.message.includes('abort');
@@ -578,10 +668,12 @@ export class FrameEndpoint implements Endpoint {
 
 					if (isAbortError && !isLastAttempt) {
 						this.logger.debug(
-							`Thumbnail request aborted for ${photoId}, retrying in ${(attempt + 1) * 1000}ms...`
+							`Thumbnail request aborted for ${photoId}, retrying in ${(attempt + 1) * 1000}ms...`,
 						);
 						// Wait before retry with exponential backoff
-						await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 1000));
+						await new Promise((resolve) =>
+							setTimeout(resolve, (attempt + 1) * 1000),
+						);
 						continue;
 					}
 
@@ -607,7 +699,9 @@ export class FrameEndpoint implements Endpoint {
 				`Failed to get thumbnail for photo ID ${photoId}: ${errorDetails.message}`,
 			);
 			this.logger.error(`Error details: ${errorDetails.details}`);
-			await this.rawD2DLog(`THUMBNAIL fatal id=${photoId} msg=${errorDetails.message}`);
+			await this.rawD2DLog(
+				`THUMBNAIL fatal id=${photoId} msg=${errorDetails.message}`,
+			);
 			return Buffer.alloc(0);
 		}
 	}
@@ -619,35 +713,42 @@ export class FrameEndpoint implements Endpoint {
 	private async downloadFullImage(photoId: string): Promise<Buffer> {
 		try {
 			this.logger.debug(`Downloading full image for ${photoId}`);
-			
+
 			// Request the full image via WebSocket d2d socket
-			const response = await this.withClient(() => this.client.request({
-				request: 'get_image',
-				content_id: photoId,
-				conn_info: {
-					d2d_mode: 'socket',
-					connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
-					id: this.generateUUID(),
-				},
-			}));
+			const response = await this.withClient(() =>
+				this.client.request({
+					request: 'get_image',
+					content_id: photoId,
+					conn_info: {
+						d2d_mode: 'socket',
+						connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
+						id: this.generateUUID(),
+					},
+				}),
+			);
 
 			if (!response || !response.conn_info) {
 				this.logger.warn(`No connection info in response for ${photoId}`);
 				return Buffer.alloc(0);
 			}
 
-			const connInfo = typeof response.conn_info === 'string' 
-				? JSON.parse(response.conn_info) 
-				: response.conn_info;
+			const connInfo =
+				typeof response.conn_info === 'string'
+					? JSON.parse(response.conn_info)
+					: response.conn_info;
 
 			// Download the image using d2d socket
 			const imageData = await this.readImageData(connInfo);
-			
-			this.logger.debug(`Downloaded full image for ${photoId}, size: ${imageData.length} bytes`);
+
+			this.logger.debug(
+				`Downloaded full image for ${photoId}, size: ${imageData.length} bytes`,
+			);
 			return imageData;
 		} catch (error) {
 			const errorDetails = this.extractErrorDetails(error);
-			this.logger.error(`Failed to download full image for ${photoId}: ${errorDetails.message}`);
+			this.logger.error(
+				`Failed to download full image for ${photoId}: ${errorDetails.message}`,
+			);
 			// Return empty buffer instead of throwing
 			return Buffer.alloc(0);
 		}
@@ -728,7 +829,9 @@ export class FrameEndpoint implements Endpoint {
 			await this.thumbnailLock;
 		}
 		let release: () => void;
-		this.thumbnailLock = new Promise<void>((res) => { release = res; });
+		this.thumbnailLock = new Promise<void>((res) => {
+			release = res;
+		});
 		try {
 			return await fn();
 		} finally {
@@ -741,15 +844,17 @@ export class FrameEndpoint implements Endpoint {
 	async getThumbnailList(photoIds: string[]): Promise<Buffer[]> {
 		try {
 			const contentIdList = photoIds.map((id) => ({ content_id: id }));
-			const response = await this.withClient(() => this.client.request({
-				request: 'get_thumbnail_list',
-				content_id_list: contentIdList,
-				conn_info: {
-					d2d_mode: 'socket',
-					connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
-					id: this.generateUUID(),
-				},
-			}));
+			const response = await this.withClient(() =>
+				this.client.request({
+					request: 'get_thumbnail_list',
+					content_id_list: contentIdList,
+					conn_info: {
+						d2d_mode: 'socket',
+						connection_id: Math.floor(Math.random() * 4 * 1024 * 1024 * 1024),
+						id: this.generateUUID(),
+					},
+				}),
+			);
 
 			const connInfo = JSON.parse(response.conn_info);
 			const thumbnails = await this.readThumbnailList(connInfo);
@@ -768,22 +873,35 @@ export class FrameEndpoint implements Endpoint {
 	/**
 	 * Extract error details from various error types including Event objects
 	 */
-	private extractErrorDetails(error: any): { message: string; details: string; } {
+	private extractErrorDetails(error: any): {
+		message: string;
+		details: string;
+	} {
 		try {
 			// Handle Event objects
-			if (error && typeof error === 'object' && error.constructor && error.constructor.name === 'Event') {
+			if (
+				error &&
+				typeof error === 'object' &&
+				error.constructor &&
+				error.constructor.name === 'Event'
+			) {
 				return {
 					message: `Event error: ${error.type || 'unknown'}`,
-					details: JSON.stringify({
-						type: error.type,
-						target: error.target?.constructor?.name || 'unknown',
-						currentTarget: error.currentTarget?.constructor?.name || 'unknown',
-						timeStamp: error.timeStamp,
-						eventPhase: error.eventPhase,
-						bubbles: error.bubbles,
-						cancelable: error.cancelable,
-						defaultPrevented: error.defaultPrevented,
-					}, null, 2)
+					details: JSON.stringify(
+						{
+							type: error.type,
+							target: error.target?.constructor?.name || 'unknown',
+							currentTarget:
+								error.currentTarget?.constructor?.name || 'unknown',
+							timeStamp: error.timeStamp,
+							eventPhase: error.eventPhase,
+							bubbles: error.bubbles,
+							cancelable: error.cancelable,
+							defaultPrevented: error.defaultPrevented,
+						},
+						null,
+						2,
+					),
 				};
 			}
 
@@ -791,11 +909,15 @@ export class FrameEndpoint implements Endpoint {
 			if (error instanceof Error) {
 				return {
 					message: error.message,
-					details: JSON.stringify({
-						name: error.name,
-						message: error.message,
-						stack: error.stack?.split('\n').slice(0, 5).join('\n') // First 5 lines of stack
-					}, null, 2)
+					details: JSON.stringify(
+						{
+							name: error.name,
+							message: error.message,
+							stack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
+						},
+						null,
+						2,
+					),
 				};
 			}
 
@@ -803,24 +925,23 @@ export class FrameEndpoint implements Endpoint {
 			if (error && typeof error === 'object') {
 				return {
 					message: error.message || error.toString() || 'Unknown object error',
-					details: JSON.stringify(error, null, 2)
+					details: JSON.stringify(error, null, 2),
 				};
 			}
 
 			// Handle primitive types
 			return {
 				message: String(error),
-				details: `Type: ${typeof error}, Value: ${String(error)}`
+				details: `Type: ${typeof error}, Value: ${String(error)}`,
 			};
 		} catch (extractError) {
 			// Fallback if extraction itself fails
 			return {
 				message: 'Error extraction failed',
-				details: `Original error: ${String(error)}, Extraction error: ${String(extractError)}`
+				details: `Original error: ${String(error)}, Extraction error: ${String(extractError)}`,
 			};
 		}
 	}
-
 
 	private async readThumbnailList(connInfo: any): Promise<Buffer[]> {
 		return new Promise((resolve, reject) => {
@@ -945,7 +1066,7 @@ export class FrameEndpoint implements Endpoint {
 	 */
 	async upload(
 		photo: Photo,
-		onProgress?: (progress: number) => void,
+		onProgress?: (_progress: number) => void,
 	): Promise<string> {
 		if (photo instanceof FramePhoto) {
 			throw new Error('Object is already a FramePhoto, cannot upload again');
@@ -976,7 +1097,9 @@ export class FrameEndpoint implements Endpoint {
 			onProgress(50); // Upload starting
 		}
 
-		const uploadPromise = this.withClient(() => this.client.upload(Buffer.from(buffer), { fileType }));
+		const uploadPromise = this.withClient(() =>
+			this.client.upload(Buffer.from(buffer), { fileType }),
+		);
 
 		// Simulate progress during upload (since we can't hook into actual stream)
 		const progressInterval = setInterval(() => {
@@ -1369,7 +1492,7 @@ export class FrameEndpoint implements Endpoint {
 	 */
 	async getArtInfo(photoId: string): Promise<any> {
 		try {
-			const response = await this.client.request({
+			await this.client.request({
 				request: 'get_artmode_status',
 			});
 
@@ -1377,10 +1500,9 @@ export class FrameEndpoint implements Endpoint {
 			const currentArt = await this.getCurrentArt();
 			if (currentArt && currentArt.id === photoId) {
 				return {
-
 					isCurrent: true,
 					...currentArt,
-					id: photoId
+					id: photoId,
 				};
 			}
 

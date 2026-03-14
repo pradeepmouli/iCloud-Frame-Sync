@@ -26,7 +26,9 @@ export class ThumbnailService {
 	async initialize(): Promise<void> {
 		try {
 			await mkdir(this.cacheDir, { recursive: true });
-			this.logger.info(`Thumbnail cache directory initialized: ${this.cacheDir}`);
+			this.logger.info(
+				`Thumbnail cache directory initialized: ${this.cacheDir}`,
+			);
 		} catch (error) {
 			this.logger.error(
 				{ error },
@@ -39,10 +41,7 @@ export class ThumbnailService {
 	/**
 	 * Generate a cache key for a thumbnail
 	 */
-	private getCacheKey(
-		contentId: string,
-		options: ThumbnailOptions,
-	): string {
+	private getCacheKey(contentId: string, options: ThumbnailOptions): string {
 		const { width = 300, height = 300, fit = 'cover', quality = 80 } = options;
 		return `${contentId}_${width}x${height}_${fit}_${quality}.jpg`;
 	}
@@ -100,12 +99,7 @@ export class ThumbnailService {
 		contentId: string,
 		options: ThumbnailOptions = {},
 	): Promise<Buffer> {
-		const {
-			width = 300,
-			height = 300,
-			fit = 'cover',
-			quality = 80,
-		} = options;
+		const { width = 300, height = 300, fit = 'cover', quality = 80 } = options;
 
 		try {
 			this.logger.debug(
@@ -135,10 +129,7 @@ export class ThumbnailService {
 
 			return thumbnail;
 		} catch (error) {
-			this.logger.error(
-				{ error, contentId },
-				'Failed to generate thumbnail',
-			);
+			this.logger.error({ error, contentId }, 'Failed to generate thumbnail');
 			throw error;
 		}
 	}
@@ -171,8 +162,8 @@ export class ThumbnailService {
 			const files = await readdir(this.cacheDir);
 
 			await Promise.all(
-				files.map(file =>
-					unlink(path.join(this.cacheDir, file)).catch(error => {
+				files.map((file) =>
+					unlink(path.join(this.cacheDir, file)).catch((error) => {
 						this.logger.warn(
 							{ error, file },
 							'Failed to delete cached thumbnail',

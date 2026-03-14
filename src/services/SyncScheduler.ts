@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import type { Logger } from 'pino';
 import type { Endpoint } from '../types/endpoint.js';
 import type { SyncStateService } from './SyncStateService.js';
@@ -66,7 +67,7 @@ export class SyncScheduler {
 	private currentBackoffSeconds = 0;
 	private nextRunAt: Date | null = null;
 
-	constructor (config: SyncSchedulerConfig, logger: Logger) {
+	constructor(config: SyncSchedulerConfig, logger: Logger) {
 		this.logger = logger;
 		this.intervalSeconds = config.intervalSeconds;
 		this.endpoints = config.endpoints;
@@ -80,7 +81,10 @@ export class SyncScheduler {
 		// Validate interval
 		if (this.intervalSeconds < this.minIntervalSeconds) {
 			this.logger.warn(
-				{ intervalSeconds: this.intervalSeconds, minIntervalSeconds: this.minIntervalSeconds },
+				{
+					intervalSeconds: this.intervalSeconds,
+					minIntervalSeconds: this.minIntervalSeconds,
+				},
 				'Interval too low, using minimum',
 			);
 			this.intervalSeconds = this.minIntervalSeconds;
@@ -236,7 +240,10 @@ export class SyncScheduler {
 					if (i !== j) {
 						const targetEndpoint = this.endpoints[j];
 						if (!targetEndpoint) {
-							this.logger.warn({ index: j }, 'Target endpoint undefined, skipping');
+							this.logger.warn(
+								{ index: j },
+								'Target endpoint undefined, skipping',
+							);
 							continue;
 						}
 
@@ -392,7 +399,10 @@ export class SyncScheduler {
 		if (this.isRunning()) {
 			this.stop();
 			this.start().catch((error) => {
-				this.logger.error({ error }, 'Failed to restart scheduler after interval update');
+				this.logger.error(
+					{ error },
+					'Failed to restart scheduler after interval update',
+				);
 			});
 		}
 	}

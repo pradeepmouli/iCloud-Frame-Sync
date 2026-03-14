@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 
@@ -34,8 +35,9 @@ export interface FrameManagerOptions<T extends ServicesSchema> {
 	autoStartHeartbeat?: boolean;
 	maxReconnectAttempts?: number;
 	reconnectDelayMs?: number;
-	// eslint-disable-next-line no-unused-vars
-	clientFactory?: (factoryConfig: SamsungFrameClientOptions<T>) => SamsungFrameClientType<T>;
+	clientFactory?: (
+		_factoryConfig: SamsungFrameClientOptions<T>,
+	) => SamsungFrameClientType<T>;
 }
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -65,19 +67,21 @@ export class FrameManager<
 	private reconnectAttempts = 0;
 	private isReconnecting = false;
 
-	constructor (
+	constructor(
 		config: SamsungFrameClientOptions<T>,
 		logger: Logger,
 		options: FrameManagerOptions<T> = {},
 	) {
 		this.logger = logger;
-		const clientFactory = options.clientFactory ?? ((factoryConfig: SamsungFrameClientOptions<T>) =>
-			new SamsungFrameClient({
-				host: factoryConfig.host,
-				name: factoryConfig.name ?? 'SamsungTv',
-				services: factoryConfig.services,
-				verbosity: factoryConfig.verbosity ?? 0,
-			}) as SamsungFrameClientType<T>);
+		const clientFactory =
+			options.clientFactory ??
+			((factoryConfig: SamsungFrameClientOptions<T>) =>
+				new SamsungFrameClient({
+					host: factoryConfig.host,
+					name: factoryConfig.name ?? 'SamsungTv',
+					services: factoryConfig.services,
+					verbosity: factoryConfig.verbosity ?? 0,
+				}) as SamsungFrameClientType<T>);
 		this.client = clientFactory(config);
 		this.host = config.host;
 		this.heartbeatIntervalMs = Math.max(
@@ -120,9 +124,9 @@ export class FrameManager<
 				this.client.getDeviceInfo(),
 				this.client.isOn().catch(() => false),
 				this.client.inArtMode().catch(() => false),
-				this.client.getArtModeInfo().catch(() => undefined as
-					| Record<string, unknown>
-					| undefined),
+				this.client
+					.getArtModeInfo()
+					.catch(() => undefined as Record<string, unknown> | undefined),
 			]);
 			const responseTimeMs = Math.round(performance.now() - startedAt);
 			const snapshot: FrameHeartbeatSnapshot = {
@@ -147,7 +151,10 @@ export class FrameManager<
 		} catch (error: unknown) {
 			const responseTimeMs = Math.round(performance.now() - startedAt);
 			const message = this.normalizeError(error);
-			this.logger.warn({ error, host: this.host }, 'Frame reachability probe failed');
+			this.logger.warn(
+				{ error, host: this.host },
+				'Frame reachability probe failed',
+			);
 			const snapshot: FrameHeartbeatSnapshot = {
 				lastCheckedAt: Date.now(),
 				isReachable: false,
@@ -203,7 +210,7 @@ export class FrameManager<
 		return await this.client.getArtModeInfo();
 	}
 
-	async upload(buffer: Buffer, options: { fileType: string; }): Promise<string> {
+	async upload(buffer: Buffer, options: { fileType: string }): Promise<string> {
 		return await this.client.upload(buffer, options);
 	}
 
@@ -225,7 +232,10 @@ export class FrameManager<
 		this.stopHeartbeat();
 		this.heartbeatTimer = setInterval(() => {
 			void this.heartbeat().catch((error) => {
-				this.logger.warn({ error, host: this.host }, 'Heartbeat execution failed');
+				this.logger.warn(
+					{ error, host: this.host },
+					'Heartbeat execution failed',
+				);
 				// Attempt reconnection if we have consecutive failures
 				void this.attemptReconnection();
 			});
@@ -274,7 +284,9 @@ export class FrameManager<
 
 		try {
 			// Wait before attempting reconnection
-			await new Promise((resolve) => setTimeout(resolve, this.reconnectDelayMs));
+			await new Promise((resolve) =>
+				setTimeout(resolve, this.reconnectDelayMs),
+			);
 
 			// Close existing connection
 			await this.client.close().catch(() => {

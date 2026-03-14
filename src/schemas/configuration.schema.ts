@@ -14,7 +14,10 @@ import { z } from 'zod';
  */
 export const ICloudConfigSchema = z.object({
 	username: z.string().email('Must be a valid email address').optional(),
-	password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+	password: z
+		.string()
+		.min(8, 'Password must be at least 8 characters')
+		.optional(),
 	sourceAlbum: z.string().optional(),
 });
 
@@ -26,7 +29,7 @@ export const FrameConfigSchema = z.object({
 		.string()
 		.regex(
 			/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i,
-			'Must be a valid IP address or hostname'
+			'Must be a valid IP address or hostname',
 		)
 		.optional(),
 	port: z.number().int().min(1).max(65535).default(8002),
@@ -36,10 +39,20 @@ export const FrameConfigSchema = z.object({
  * Sync Configuration Schema
  */
 export const SyncConfigSchema = z.object({
-	interval: z.number().int().min(30).max(3600, 'Interval must be between 30 and 3600 seconds').default(60),
+	interval: z
+		.number()
+		.int()
+		.min(30)
+		.max(3600, 'Interval must be between 30 and 3600 seconds')
+		.default(60),
 	enabled: z.boolean().default(false),
 	deleteAfterSync: z.boolean().default(true),
-	maxRetries: z.number().int().min(0).max(10, 'Max retries must be between 0 and 10').default(3),
+	maxRetries: z
+		.number()
+		.int()
+		.min(0)
+		.max(10, 'Max retries must be between 0 and 10')
+		.default(3),
 });
 
 /**
@@ -93,7 +106,7 @@ export const TestFrameRequestSchema = z.object({
 		.string()
 		.regex(
 			/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i,
-			'Must be a valid IP address or hostname'
+			'Must be a valid IP address or hostname',
 		),
 	port: z.number().int().min(1).max(65535),
 });
