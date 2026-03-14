@@ -8,10 +8,11 @@
  */
 
 import { NextFunction, Request, Response } from 'express';
-import pino from 'pino';
 import { ZodError, ZodSchema } from 'zod';
 
-const logger = pino({ name: 'validation' });
+import { createLogger } from '../observability/logger.js';
+
+const logger = createLogger({ name: 'validation' });
 
 /**
  * Validation target (which part of request to validate)

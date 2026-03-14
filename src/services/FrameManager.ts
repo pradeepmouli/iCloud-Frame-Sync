@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
+
+import { resolveErrorMessage } from '../lib/errors.js';
 import {
 	SamsungFrameClient,
 	type SamsungFrameClientOptions,
@@ -241,13 +243,7 @@ export class FrameManager<
 	}
 
 	private normalizeError(error: unknown): string {
-		if (error instanceof Error && typeof error.message === 'string') {
-			return error.message;
-		}
-		if (typeof error === 'string' && error.trim().length > 0) {
-			return error.trim();
-		}
-		return 'Unable to reach Samsung Frame device.';
+		return resolveErrorMessage(error, 'Unable to reach Samsung Frame device.');
 	}
 
 	private async attemptReconnection(): Promise<void> {

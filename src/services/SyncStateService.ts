@@ -54,6 +54,7 @@ export class SyncStateService extends EventEmitter {
 	private currentState: SyncState;
 	private logger: Logger;
 	private syncStateId: string | null = null;
+	private idleResetTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(logger: Logger) {
 		super();
@@ -128,6 +129,16 @@ export class SyncStateService extends EventEmitter {
 	 */
 	async updateState(updates: Partial<SyncState>): Promise<void> {
 		const previousStatus = this.currentState.status;
+
+		// Check if any values actually changed to avoid no-op updates
+		const hasChanges = Object.keys(updates).some((key) => {
+			const k = key as keyof SyncState;
+			return this.currentState[k] !== updates[k];
+		});
+
+		if (!hasChanges) {
+			return;
+		}
 
 		this.currentState = {
 			...this.currentState,
@@ -219,8 +230,12 @@ export class SyncStateService extends EventEmitter {
 			currentPhotoId: undefined,
 		});
 
-		// Reset to idle after a brief delay
-		setTimeout(async () => {
+		// Reset to idle after a brief delay, clearing any previous pending timer
+		if (this.idleResetTimer) {
+			clearTimeout(this.idleResetTimer);
+		}
+		this.idleResetTimer = setTimeout(async () => {
+			this.idleResetTimer = null;
 			if (this.currentState.status === 'completed' || this.currentState.status === 'error') {
 				await this.updateState({ status: 'idle' });
 			}

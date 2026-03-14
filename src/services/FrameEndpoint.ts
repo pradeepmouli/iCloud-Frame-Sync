@@ -1,7 +1,6 @@
 import exif from 'exif-reader';
 import { randomBytes } from 'node:crypto';
-import fs from 'node:fs';
-import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir } from 'node:fs/promises';
 import path, { dirname, resolve as resolvePath } from 'node:path';
 import * as tls from 'node:tls';
 import type { Logger } from 'pino';
@@ -81,43 +80,36 @@ export class FrameEndpoint implements Endpoint {
 
 	private async initRawLoggers(): Promise<void> {
 		try {
-			const wsLog = process.env['FRAME_WS_LOG'];
-			const d2dLog = process.env['FRAME_D2D_LOG'];
-			if (wsLog && typeof wsLog === 'string' && wsLog.trim().length > 0) {
-				this.wsLogPath = resolvePath(wsLog.trim());
-				await mkdir(dirname(this.wsLogPath), { recursive: true });
-				if (!fs.existsSync(this.wsLogPath)) {
-					await writeFile(this.wsLogPath, '');
-				}
-			}
-			if (d2dLog && typeof d2dLog === 'string' && d2dLog.trim().length > 0) {
-				this.d2dLogPath = resolvePath(d2dLog.trim());
-				await mkdir(dirname(this.d2dLogPath), { recursive: true });
-				if (!fs.existsSync(this.d2dLogPath)) {
-					await writeFile(this.d2dLogPath, '');
-				}
-			}
+			this.wsLogPath = await this.initLogFile(process.env['FRAME_WS_LOG']);
+			this.d2dLogPath = await this.initLogFile(process.env['FRAME_D2D_LOG']);
 		} catch (e) {
 			this.logger.warn({ error: this.extractErrorDetails(e).message }, 'Failed to initialize raw log files');
 		}
 	}
 
-	private async rawWsLog(line: string): Promise<void> {
-		if (!this.wsLogPath) return;
+	private async initLogFile(envVar: string | undefined): Promise<string | null> {
+		if (!envVar || typeof envVar !== 'string' || envVar.trim().length === 0) return null;
+		const logPath = resolvePath(envVar.trim());
+		await mkdir(dirname(logPath), { recursive: true });
+		await appendFile(logPath, ''); // creates file if it doesn't exist
+		return logPath;
+	}
+
+	private async rawLog(logPath: string | null, line: string): Promise<void> {
+		if (!logPath) return;
 		try {
-			await appendFile(this.wsLogPath, `[${new Date().toISOString()}] ${line}\n`);
-		} catch (e) {
+			await appendFile(logPath, `[${new Date().toISOString()}] ${line}\n`);
+		} catch {
 			// avoid throwing from logger
 		}
 	}
 
+	private async rawWsLog(line: string): Promise<void> {
+		return this.rawLog(this.wsLogPath, line);
+	}
+
 	private async rawD2DLog(line: string): Promise<void> {
-		if (!this.d2dLogPath) return;
-		try {
-			await appendFile(this.d2dLogPath, `[${new Date().toISOString()}] ${line}\n`);
-		} catch (e) {
-			// avoid throwing from logger
-		}
+		return this.rawLog(this.d2dLogPath, line);
 	}
 
 	private async withClient<T>(op: () => Promise<T>): Promise<T> {
@@ -506,17 +498,6 @@ export class FrameEndpoint implements Endpoint {
 			this.logger.debug(`Requesting thumbnail for photo ID: ${photoId}`);
 			await this.rawD2DLog(`THUMBNAIL start id=${photoId}`);
 
-			// First, try to check if the art exists in the available art list
-			const availableArt = await this.withClient(() => this.client.getAvailableArt());
-			const artExists = availableArt.some((art) => art.id === photoId);
-
-			if (!artExists) {
-				this.logger.warn(
-					`Art with ID ${photoId} not found in available art list`,
-				);
-				return Buffer.alloc(0);
-			}
-
 			// Check if this is a user-uploaded photo (MY-* prefix)
 			const isUserPhoto = photoId.startsWith('MY_') || photoId.startsWith('MY-');
 			
@@ -840,81 +821,6 @@ export class FrameEndpoint implements Endpoint {
 		}
 	}
 
-	private async readThumbnailData(connInfo: any): Promise<Buffer> {
-		return new Promise((resolve, reject) => {
-			this.logger.debug(
-				`Connecting to ${connInfo.ip}:${connInfo.port} for thumbnail data`,
-			);
-
-			const socket = tls.connect(
-				{
-					host: connInfo.ip,
-					port: parseInt(connInfo.port),
-					rejectUnauthorized: false,
-				},
-				async () => {
-					try {
-						this.logger.debug(
-							'TLS connection established, reading thumbnail data',
-						);
-
-						// Read header length (4 bytes)
-						const headerLenBuffer = await this.readExactly(socket, 4);
-						const headerLen = headerLenBuffer.readUInt32BE(0);
-						this.logger.debug(`Header length: ${headerLen}`);
-
-						// Read header
-						const headerBuffer = await this.readExactly(socket, headerLen);
-						const header = JSON.parse(headerBuffer.toString());
-						this.logger.debug(`Header: ${JSON.stringify(header)}`);
-
-						// Read thumbnail data
-						const thumbnailDataLen = parseInt(header.fileLength);
-						this.logger.debug(`Thumbnail data length: ${thumbnailDataLen}`);
-
-						if (thumbnailDataLen <= 0) {
-							throw new Error(
-								`Invalid thumbnail data length: ${thumbnailDataLen}`,
-							);
-						}
-
-						const thumbnailData = await this.readExactly(
-							socket,
-							thumbnailDataLen,
-						);
-
-						socket.end();
-						this.logger.debug(
-							`Successfully read ${thumbnailData.length} bytes of thumbnail data`,
-						);
-						resolve(thumbnailData);
-					} catch (error) {
-						socket.end();
-						const errorMessage =
-							error instanceof Error ? error.message : String(error);
-						this.logger.error(`Error reading thumbnail data: ${errorMessage}`);
-						reject(error);
-					}
-				},
-			);
-
-			socket.on('error', (error) => {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
-				this.logger.error(`Socket error: ${errorMessage}`);
-				reject(error);
-			});
-
-			socket.on('timeout', () => {
-				this.logger.error('Socket timeout');
-				socket.destroy();
-				reject(new Error('Socket timeout'));
-			});
-
-			// Set a timeout for the connection
-			socket.setTimeout(10000); // 10 seconds
-		});
-	}
 
 	private async readThumbnailList(connInfo: any): Promise<Buffer[]> {
 		return new Promise((resolve, reject) => {

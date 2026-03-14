@@ -3,6 +3,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 
+import { MfaRequiredError, resolveErrorMessage, safeClose } from '../lib/errors.js';
 import type { FrameConfig, iCloudConfig } from '../types/endpoint.js';
 import type {
 	ConnectionTestResult,
@@ -29,33 +30,6 @@ export interface ConnectionTesterOptions {
 	defaultAlbum?: string;
 	dataDirectory?: string;
 	sessionTtlMs?: number;
-}
-
-class MfaRequiredError extends Error {
-	public readonly sessionId: string;
-
-	constructor (sessionId: string) {
-		super('MFA_REQUIRED');
-		this.sessionId = sessionId;
-	}
-}
-
-function resolveErrorMessage(_error: unknown): string {
-	if (_error instanceof Error && typeof _error.message === 'string') {
-		return _error.message;
-	}
-	if (typeof _error === 'string' && _error.trim().length > 0) {
-		return _error.trim();
-	}
-	return 'An unexpected error occurred while testing the connection.';
-}
-
-async function safeClose(endpoint: { close: () => Promise<void>; }): Promise<void> {
-	try {
-		await endpoint.close();
-	} catch (error) {
-		// Swallow close errors to avoid masking original issues.
-	}
 }
 
 export class ConnectionTesterService implements ConnectionTester {

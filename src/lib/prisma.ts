@@ -8,9 +8,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import pino from 'pino';
 
-const logger = pino({ name: 'prisma' });
+import { createLogger } from '../observability/logger.js';
+
+const logger = createLogger({ name: 'prisma' });
 
 // Global augmentation for PrismaClient instance
 const globalForPrisma = globalThis as unknown as {
@@ -61,9 +62,9 @@ const shutdown = async () => {
 	logger.info('Prisma client disconnected');
 };
 
-process.on('beforeExit', shutdown);
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.once('beforeExit', shutdown);
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
 
 /**
  * Test database connection

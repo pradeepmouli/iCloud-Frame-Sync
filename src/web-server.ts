@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { Logger } from 'pino';
 
+import { MfaRequiredError, resolveErrorMessage } from './lib/errors.js';
 import { validateBody } from './lib/validation.js';
 import { createComponentLogger, createLogger } from './observability/logger.js';
 import {
@@ -201,13 +202,23 @@ function extractSettingsUpdate(
 	return update;
 }
 
-class MfaRequiredError extends Error {
-	public readonly sessionId: string;
-
-	constructor (sessionId: string) {
-		super('MFA_REQUIRED');
-		this.sessionId = sessionId;
+function redactSensitiveFields(value: unknown): unknown {
+	if (!value || typeof value !== 'object') return value;
+	const src = value as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(src)) {
+		const key = k.toLowerCase();
+		if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
+			out[k] = '[REDACTED]';
+		} else if (key === 'data' && typeof v === 'string') {
+			out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
+		} else if (typeof v === 'object' && v !== null) {
+			out[k] = redactSensitiveFields(v);
+		} else {
+			out[k] = v;
+		}
 	}
+	return out;
 }
 
 interface PendingAuthSession {
@@ -247,12 +258,6 @@ function isFrameConnectionRequest(
 	return typeof host === 'string' && host.trim().length > 0;
 }
 
-function resolveErrorMessage(error: unknown): string {
-	if (error instanceof Error && typeof error.message === 'string') {
-		return error.message;
-	}
-	return 'Unknown error occurred during connection testing.';
-}
 
 function normalizeICloudRequest(
 	request: ICloudConnectionTestRequest,
@@ -315,26 +320,7 @@ export async function createWebServer(
 	app.use((req, res, next) => {
 		const start = Date.now();
 		const requestId = crypto.randomUUID();
-		const redact = (value: unknown): unknown => {
-			if (!value || typeof value !== 'object') return value;
-			const src = value as Record<string, unknown>;
-			const out: Record<string, unknown> = {};
-			for (const [k, v] of Object.entries(src)) {
-				const key = k.toLowerCase();
-				if (key === 'password' || key === 'icloudpassword' || key === 'code' || key === 'mfacode') {
-					out[k] = '[REDACTED]';
-				} else if (key === 'data' && typeof v === 'string') {
-					out[k] = `[base64 ${Math.min(v.length, 16)} chars…]`;
-				} else if (typeof v === 'object' && v !== null) {
-					out[k] = redact(v);
-				} else {
-					out[k] = v;
-				}
-			}
-			return out;
-		};
-
-		const safeBody = redact(req.body);
+		const safeBody = redactSensitiveFields(req.body);
 		logger.info({ requestId, method: req.method, url: req.originalUrl, body: safeBody }, 'HTTP request');
 
 		res.on('finish', () => {

@@ -6,11 +6,11 @@
  * @module services/ConfigurationService
  */
 
-import pino from 'pino';
 import { decrypt, encrypt, isEncrypted } from '../lib/encryption.js';
 import { prisma } from '../lib/prisma.js';
+import { createLogger } from '../observability/logger.js';
 
-const logger = pino({ name: 'ConfigurationService' });
+const logger = createLogger({ name: 'ConfigurationService' });
 
 export interface ConfigurationData {
 	// iCloud Configuration
