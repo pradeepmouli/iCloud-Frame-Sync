@@ -8,6 +8,7 @@
  * - Event emission
  * - Database persistence
  */
+import '../helpers/setup.js';
 import { EventEmitter } from 'events';
 import { expect } from 'chai';
 import { afterEach, beforeEach, describe, it } from 'mocha';

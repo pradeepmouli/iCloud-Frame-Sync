@@ -6,6 +6,7 @@
  * - Password encryption/decryption
  * - Connection testing
  */
+import '../helpers/setup.js';
 import { expect } from 'chai';
 import { afterEach, beforeEach, describe, it } from 'mocha';
 import { decrypt, encrypt } from '../../src/lib/encryption.js';

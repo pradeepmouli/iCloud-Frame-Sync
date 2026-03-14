@@ -52,6 +52,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Setup test database
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: file:./data/test-sync.db
+
       - name: Run unit tests
         run: npm run test:unit
 
@@ -73,6 +78,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Setup test database
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: file:./data/test-sync.db
 
       - name: Run integration tests
         run: npm run test:integration
@@ -125,6 +135,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Setup test database
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: file:./data/test-sync.db
 
       - name: Run tests with coverage
         run: npm run test:coverage
