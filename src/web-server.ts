@@ -12,7 +12,8 @@ import {
 	TestFrameRequestSchema,
 	TestICloudRequestSchema,
 } from './schemas/configuration.schema.js';
-import { configurationService } from './services/ConfigurationService.js';
+import { ConfigurationService, type IConfigurationService } from './services/ConfigurationService.js';
+import { configurationService as defaultConfigurationService } from './services/ConfigurationService.js';
 import type { ConnectionTester, ConnectionTestResult, FrameConnectionTestRequest, ICloudConnectionTestRequest } from './services/connectionTypes.js';
 import type {
 	AlbumSummary,
@@ -67,6 +68,7 @@ export interface CreateWebServerOptions {
 	frameDashboardService: FrameDashboardService;
 	syncScheduler: SchedulerView;
 	syncStateService?: SyncStateService; // optional real-time sync state broadcaster
+	configurationService?: IConfigurationService; // optional injectable configuration service
 	logger?: Logger;
 	createICloudEndpoint?: (config: iCloudConfig, logger: Logger) => iCloudEndpoint;
 	connectionTester?: ConnectionTester | null;
@@ -290,6 +292,8 @@ export async function createWebServer(
 		syncScheduler,
 		syncStateService: providedSyncStateService,
 	} = options;
+	const configService: IConfigurationService =
+		options.configurationService ?? defaultConfigurationService;
 	const logger = resolveLogger(config, options.logger);
 	const createEndpoint =
 		options.createICloudEndpoint ??
@@ -351,7 +355,7 @@ export async function createWebServer(
 	 */
 	app.get('/api/configuration', async (_req: Request, res: Response) => {
 		try {
-			const configuration = await configurationService.getConfiguration();
+			const configuration = await configService.getConfiguration();
 			res.json(configuration);
 		} catch (error) {
 			logger.error({ error }, 'Failed to fetch configuration');
@@ -372,7 +376,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const updates = req.body;
-				const configuration = await configurationService.updateConfiguration(updates);
+				const configuration = await configService.updateConfiguration(updates);
 				res.json(configuration);
 			} catch (error) {
 				logger.error({ error }, 'Failed to update configuration');
@@ -394,7 +398,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const { username, password, sourceAlbum } = req.body;
-				const result = await configurationService.testICloudConnection(
+				const result = await configService.testICloudConnection(
 					username,
 					password,
 					sourceAlbum,
@@ -420,7 +424,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const { host, port } = req.body;
-				const result = await configurationService.testFrameConnection(host, port);
+				const result = await configService.testFrameConnection(host, port);
 				res.json(result);
 			} catch (error) {
 				logger.error({ error }, 'Frame TV connection test failed');
