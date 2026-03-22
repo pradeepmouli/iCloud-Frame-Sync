@@ -1,0 +1,14 @@
+name: Auto-approve Dependency Updates
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  approve:
+    if: github.actor == 'dependabot[bot]' || github.actor == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: hmarr/auto-approve-action@v4
