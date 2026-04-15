@@ -1,0 +1,93 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
+    open-pull-requests-limit: 5
+    groups:
+      # Group TypeScript and related packages
+      typescript:
+        patterns:
+          - 'typescript'
+          - '@typescript-eslint/*'
+          - '@types/*'
+          - 'typescript-eslint'
+          - 'typescript-eslint-parser'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group testing frameworks
+      testing:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+          - 'mocha'
+          - 'chai'
+          - 'sinon'
+          - 'supertest'
+          - 'nyc'
+          - '@testing-library/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group build tools
+      build-tools:
+        patterns:
+          - 'vite'
+          - '@vitejs/*'
+          - 'tsx'
+          - 'ts-node'
+          - 'nodemon'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group React and UI packages
+      react-ui:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - 'react-*'
+          - '@mui/*'
+          - '@emotion/*'
+          - '@hookform/*'
+          - '@tanstack/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Group code quality tools
+      code-quality:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+          - '@eslint/*'
+          - 'prettier'
+          - 'prettier-*'
+          - 'lint-staged'
+        update-types:
+          - 'minor'
+          - 'patch'
+    labels:
+      - 'dependencies'
+      - 'automated'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
+    open-pull-requests-limit: 3
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
