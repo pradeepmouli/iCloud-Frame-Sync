@@ -81,8 +81,8 @@
 		"@types/sinon": "^17.0.4",
 		"@types/supertest": "^2.0.16",
 		"@types/tough-cookie": "^4.0.5",
-		"@typescript-eslint/eslint-plugin": "^8.46.1",
-		"@typescript-eslint/parser": "^8.46.1",
+		"@typescript-eslint/eslint-plugin": "^8.58.2",
+		"@typescript-eslint/parser": "^8.58.2",
 		"chai": "^6.2.0",
 		"deno": "^2.5.4",
 		"eslint": "^9.38.0",
@@ -102,7 +102,7 @@
 		"tsx": "^4.20.6",
 		"type-fest": "^5.1.0",
 		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.46.2",
+		"typescript-eslint": "^8.58.2",
 		"typescript-eslint-parser": "^22.0.0",
 		"vitest": "^2.1.3"
 	}
