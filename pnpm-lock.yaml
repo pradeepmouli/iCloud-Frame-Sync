@@ -33,8 +33,8 @@ importers:
         specifier: ^6.19.0
         version: 6.19.0(prisma@6.19.0(typescript@5.9.3))(typescript@5.9.3)
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@19.2.5)
+        specifier: ^5.99.2
+        version: 5.99.2(react@19.2.5)
       '@types/cors':
         specifier: ^2.8.19
         version: 2.8.19
@@ -1272,11 +1272,11 @@ packages:
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
-  '@tanstack/query-core@5.99.0':
-    resolution: {integrity: sha512-3Jv3WQG0BCcH7G+7lf/bP8QyBfJOXeY+T08Rin3GZ1bshvwlbPt7NrDHMEzGdKIOmOzvIQmxjk28YEQX60k7pQ==}
+  '@tanstack/query-core@5.99.2':
+    resolution: {integrity: sha512-1HunU0bXVsR1ZJMZbcOPE6VtaBJxsW809RE9xPe4Gz7MlB0GWwQvuTPhMoEmQ/hIzFKJ/DWAuttIe7BOaWx0tA==}
 
-  '@tanstack/react-query@5.99.0':
-    resolution: {integrity: sha512-OY2bCqPemT1LlqJ8Y2CUau4KELnIhhG9Ol3ZndPbdnB095pRbPo1cHuXTndg8iIwtoHTgwZjyaDnQ0xD0mYwAw==}
+  '@tanstack/react-query@5.99.2':
+    resolution: {integrity: sha512-vM91UEe45QUS9ED6OklsVL15i8qKcRqNwpWzPTVWvRPRSEgDudDgHpvyTjcdlwHcrKNa80T+xXYcchT2noPnZA==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -5142,11 +5142,11 @@ snapshots:
 
   '@standard-schema/utils@0.3.0': {}
 
-  '@tanstack/query-core@5.99.0': {}
+  '@tanstack/query-core@5.99.2': {}
 
-  '@tanstack/react-query@5.99.0(react@19.2.5)':
+  '@tanstack/react-query@5.99.2(react@19.2.5)':
     dependencies:
-      '@tanstack/query-core': 5.99.0
+      '@tanstack/query-core': 5.99.2
       react: 19.2.5
 
   '@testing-library/dom@9.3.4':
