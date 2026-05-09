@@ -31,7 +31,7 @@ function resolveTsxCli(): string {
 	try {
 		cachedTsxCli = require.resolve('tsx/cli');
 		return cachedTsxCli;
-	} catch (error) {
+	} catch {
 		throw new Error(
 			'Unable to locate tsx runtime. Please install development dependencies or build the project before running the CLI from source.',
 		);

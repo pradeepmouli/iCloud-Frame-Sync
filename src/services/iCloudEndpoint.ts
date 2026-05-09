@@ -3,13 +3,12 @@ import type {
 	iCloudPhotoAsset,
 	iCloudPhotosService,
 } from 'icloudjs';
-import iCloudService, * as iCloud from 'icloudjs';
+import iCloudService from 'icloudjs';
 import type { Logger } from 'pino';
 import type { iCloudConfig } from 'types/endpoint.js';
 import type {
 	Album,
 	Endpoint,
-	EndpointConfig,
 	Photo,
 } from '../types/endpoint.js';
 
@@ -240,7 +239,6 @@ export class iCloudEndpoint implements Endpoint {
 
 		// Default to first album or config.albums
 		const album = albumsMap.get(this.config.sourceAlbum);
-		album;
 
 		if (album) {
 			const photos = await album.getPhotos();
@@ -250,7 +248,7 @@ export class iCloudEndpoint implements Endpoint {
 		}
 	}
 
-	async upload(photo: Photo): Promise<string> {
+	async upload(_photo: Photo): Promise<string> {
 		// iCloud does not support uploading to albums via icloudjs (stub)
 		throw new Error('Upload not implemented for iCloudEndpoint');
 	}

@@ -50,7 +50,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 
 	try {
 		return JSON.parse(text) as T;
-	} catch (error) {
+	} catch {
 		throw new Error('Failed to parse response JSON');
 	}
 }
@@ -255,7 +255,7 @@ class ApiService {
 		};
 	}
 
-	async getSyncStatus(): Promise<SyncStatus> {
+	async getLegacySyncStatus(): Promise<SyncStatus> {
 		const status = await this.getStatus();
 		const isRunning = status.schedule ? !status.schedule.isPaused : false;
 		const inProgress = status.sync ? status.sync.status === 'running' && status.sync.completedAt === null : false;
@@ -385,10 +385,6 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function toStringValue(value: unknown, fallback = ''): string {
 	return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
-}
-
-function toNullableString(value: unknown): string | null {
-	return typeof value === 'string' ? value : null;
 }
 
 function toNumberValue(value: unknown, fallback: number): number {

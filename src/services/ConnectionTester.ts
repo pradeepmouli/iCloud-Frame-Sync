@@ -53,7 +53,7 @@ function resolveErrorMessage(_error: unknown): string {
 async function safeClose(endpoint: { close: () => Promise<void>; }): Promise<void> {
 	try {
 		await endpoint.close();
-	} catch (error) {
+	} catch {
 		// Swallow close errors to avoid masking original issues.
 	}
 }

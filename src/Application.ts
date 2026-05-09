@@ -2,8 +2,8 @@ import process from 'node:process';
 import { setTimeout } from 'node:timers/promises';
 import type { Logger } from 'pino';
 
-import { createAppConfigFromEnv, type AppConfig } from './config/environment.js';
-import { createComponentLogger, createLogger } from './observability/logger.js';
+import type { AppConfig } from './config/environment.js';
+import { createLogger } from './observability/logger.js';
 import { PhotoSyncService } from './services/PhotoSyncService.js';
 import { SyncScheduler } from './services/SyncScheduler.js';
 
@@ -33,8 +33,6 @@ export class Application {
 	) {
 		this.config = config;
 		this.logger = overrides?.logger ?? createLogger({ level: config.logLevel });
-		const frameLogger = createComponentLogger(this.logger, 'Samsung Frame Client');
-		const iCloudLogger = createComponentLogger(this.logger, 'iCloud Client');
 		if (overrides?.photoSyncService) {
 			this.photoSyncService = overrides.photoSyncService;
 		} else {

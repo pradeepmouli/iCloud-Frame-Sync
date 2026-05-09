@@ -18,7 +18,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { SyncStatusCard } from '../components/SyncStatusCard';

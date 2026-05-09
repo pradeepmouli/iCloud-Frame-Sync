@@ -10,7 +10,6 @@ import {
 	type ArtContentItem,
 	type SamsungFrameClientOptions,
 	type SamsungFrameClientType,
-	type ServicesSchema,
 } from 'samsung-frame-connect';
 import type { Endpoint, FrameConfig, Photo } from '../types/endpoint.js';
 import { ThumbnailService } from './ThumbnailService.js';
@@ -56,7 +55,7 @@ export class FramePhoto implements Photo {
 		try {
 			const exifData = exif(this.buffer);
 			return exifData;
-		} catch (err) {
+		} catch {
 			// Could not parse EXIF
 			return null;
 		}
@@ -106,7 +105,7 @@ export class FrameEndpoint implements Endpoint {
 		if (!this.wsLogPath) return;
 		try {
 			await appendFile(this.wsLogPath, `[${new Date().toISOString()}] ${line}\n`);
-		} catch (e) {
+		} catch {
 			// avoid throwing from logger
 		}
 	}
@@ -115,7 +114,7 @@ export class FrameEndpoint implements Endpoint {
 		if (!this.d2dLogPath) return;
 		try {
 			await appendFile(this.d2dLogPath, `[${new Date().toISOString()}] ${line}\n`);
-		} catch (e) {
+		} catch {
 			// avoid throwing from logger
 		}
 	}
@@ -211,9 +210,6 @@ export class FrameEndpoint implements Endpoint {
 
 	private instrumentWebSocket(): void {
 		try {
-			// Access internal connection object
-			const clientAny = this.client as any;
-
 			// Try to hook into the connection after it's established
 			const originalConnect = this.client.connect?.bind(this.client);
 			if (originalConnect) {
@@ -225,7 +221,7 @@ export class FrameEndpoint implements Endpoint {
 
 			// Also try immediate hook in case already connected
 			setTimeout(() => this.hookWebSocketEvents(), 100);
-		} catch (e) {
+		} catch {
 			this.logger.debug('Could not instrument WebSocket (will capture via method wrappers)');
 		}
 	}
@@ -478,7 +474,7 @@ export class FrameEndpoint implements Endpoint {
 
 	async getAvailableArtByCategory(
 		category?: string,
-		timeout: number = 4,
+		_timeout: number = 4,
 	): Promise<ArtContentItem[]> {
 		try {
 			const response = await this.client.request({
@@ -1463,7 +1459,7 @@ export class FrameEndpoint implements Endpoint {
 	 */
 	async getArtInfo(photoId: string): Promise<any> {
 		try {
-			const response = await this.client.request({
+			await this.client.request({
 				request: 'get_artmode_status',
 			});
 

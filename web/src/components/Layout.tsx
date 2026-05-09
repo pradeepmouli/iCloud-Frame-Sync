@@ -9,7 +9,7 @@ import {
 	AppBar,
 	Box,
 	Container,
-	IconButton,
+
 	Paper,
 	Tab,
 	Tabs,
@@ -122,7 +122,7 @@ export default function Layout({ children }: LayoutProps) {
               },
             }}
           >
-            {navigationItems.map((item, index) => (
+            {navigationItems.map((item) => (
               <Tab
                 key={item.path}
                 label={item.label}

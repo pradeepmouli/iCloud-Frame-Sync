@@ -57,7 +57,7 @@ export async function getExifDataFromPhoto(
     try {
       const exif = exifReader(buffer);
       return exif;
-    } catch (e) {
+    } catch {
       return null;
     }
   });

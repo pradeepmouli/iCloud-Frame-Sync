@@ -12,3 +12,8 @@ yarn-error.log
 # test coverage
 coverage/
 *.min.js
+# test files (Chai assertions are false positives for no-unused-expressions)
+test/
+# placeholder files
+src/types/index.d.ts
+jest.config.js
