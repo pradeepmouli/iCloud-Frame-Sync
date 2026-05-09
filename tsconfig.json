@@ -7,7 +7,10 @@
 		"sourceMap": true,
 		"target": "ES2024",
 		"outDir": "./dist",
+		"rootDir": "./src",
 		"baseUrl": "./src",
+		"ignoreDeprecations": "6.0",
+		"useUnknownInCatchVariables": false,
 		"experimentalDecorators": true,
 		"typeRoots": [
 			"./src/types"
