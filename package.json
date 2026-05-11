@@ -47,7 +47,7 @@
 		"@vitejs/plugin-react": "^5.1.0",
 		"commander": "^14.0.2",
 		"concurrently": "^9.2.1",
-		"cors": "^2.8.5",
+		"cors": "^2.8.6",
 		"exif": "^0.6.0",
 		"exif-parser": "^0.1.12",
 		"exif-reader": "^2.0.2",
