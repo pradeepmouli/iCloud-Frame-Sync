@@ -155,7 +155,7 @@ export default function MfaDialog({
             setMfaCode(value);
             setLocalError(null);
           }}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
           placeholder="000000"
           fullWidth
           variant="outlined"

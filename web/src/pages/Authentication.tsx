@@ -20,7 +20,7 @@ import {
 	TextField,
 	Typography,
 } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import MfaDialog from '../components/MfaDialog';
 import { api } from '../services/api';
