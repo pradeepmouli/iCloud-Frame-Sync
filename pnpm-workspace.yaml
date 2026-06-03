@@ -1,12 +1,16 @@
 allowBuilds:
-  '@prisma/client': set this to true or false
-  '@prisma/engines': set this to true or false
-  deno: set this to true or false
-  esbuild: set this to true or false
-  keytar: set this to true or false
-  prisma: set this to true or false
-  sharp: set this to true or false
+  '@prisma/client': true
+  '@prisma/engines': true
+  deno: true
+  esbuild: true
+  keytar: true
+  prisma: true
+  sharp: true
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'
+  - deno
+  - esbuild
+  - keytar
   - prisma
+  - sharp

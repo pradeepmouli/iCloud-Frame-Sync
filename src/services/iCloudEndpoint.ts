@@ -122,7 +122,7 @@ export class iCloudEndpoint implements Endpoint {
 	private logger: Logger;
 	private config: iCloudConfig;
 	private iCloudClient: iCloudService.default;
-	private photosService: iCloudPhotosService;
+	private photosService!: iCloudPhotosService;
 	private _photos: iCloudPhoto[] = [];
 	private _albums: Map<string, Album> = new Map();
 

@@ -799,7 +799,7 @@ export async function createWebServer(
 	});
 
 	app.delete('/api/frame/art/:artId', async (req: Request, res: Response) => {
-		const artId = req.params.artId?.trim();
+		const artId = (req.params.artId as string)?.trim();
 		if (!artId) {
 			res.status(400).json({ error: 'artId parameter is required' });
 			return;
@@ -819,7 +819,7 @@ export async function createWebServer(
 	});
 
 	app.get('/api/frame/art/:artId/thumbnail', async (req: Request, res: Response) => {
-		const artId = req.params.artId?.trim();
+		const artId = (req.params.artId as string)?.trim();
 		if (!artId) {
 			res.status(400).json({ error: 'artId parameter is required' });
 			return;

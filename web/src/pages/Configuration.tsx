@@ -7,7 +7,7 @@ import {
 	Card,
 	CardContent,
 	Chip,
-	GridLegacy as Grid,
+	Grid,
 	Stack,
 	Typography,
 } from '@mui/material';

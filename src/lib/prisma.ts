@@ -88,7 +88,7 @@ export async function testConnection(): Promise<void> {
  * @returns Promise resolving to function result
  */
 export async function withTransaction<T>(
-	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => Promise<T>
+	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>) => Promise<T>
 ): Promise<T> {
 	return prisma.$transaction(fn);
 }
@@ -106,7 +106,7 @@ export async function withTransaction<T>(
  * @throws Error if all retry attempts fail
  */
 export async function withTransactionRetry<T>(
-	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => Promise<T>,
+	fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$extends'>) => Promise<T>,
 	maxRetries: number = 3,
 	retryDelay: number = 100
 ): Promise<T> {

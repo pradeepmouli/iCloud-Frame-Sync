@@ -12,7 +12,7 @@ import {
 	CardContent,
 	Chip,
 	FormControl,
-	GridLegacy as Grid,
+	Grid,
 	InputLabel,
 	MenuItem,
 	Select,

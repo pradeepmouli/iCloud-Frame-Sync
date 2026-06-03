@@ -5,7 +5,7 @@ import {
 	Button,
 	CircularProgress,
 	FormControlLabel,
-	GridLegacy as Grid,
+	Grid,
 	Paper,
 	Switch,
 	TextField,

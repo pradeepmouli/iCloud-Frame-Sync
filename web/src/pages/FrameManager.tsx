@@ -20,7 +20,7 @@ import {
 	Chip,
 	Divider,
 	FormControlLabel,
-	GridLegacy as Grid,
+	Grid,
 	IconButton,
 	LinearProgress,
 	Stack,
