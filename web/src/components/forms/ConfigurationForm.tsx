@@ -165,14 +165,14 @@ export function ConfigurationForm({
 		<Box component="form" onSubmit={handleSubmit(handleFormSubmit)} sx={{ maxWidth: 800 }}>
 			<Grid container spacing={3}>
 				{/* iCloud Configuration Section */}
-				<Grid item xs={12}>
+				<Grid size={12}>
 					<Paper sx={{ p: 3 }}>
 						<Typography variant="h6" gutterBottom>
 							iCloud Configuration
 						</Typography>
 
 						<Grid container spacing={2}>
-							<Grid item xs={12}>
+							<Grid size={12}>
 								<TextField
 									{...register('icloudUsername')}
 									label="iCloud Email"
@@ -184,7 +184,7 @@ export function ConfigurationForm({
 								/>
 							</Grid>
 
-							<Grid item xs={12}>
+							<Grid size={12}>
 								<TextField
 									{...register('icloudPassword')}
 									label="iCloud Password"
@@ -199,7 +199,7 @@ export function ConfigurationForm({
 								/>
 							</Grid>
 
-							<Grid item xs={12}>
+							<Grid size={12}>
 								<TextField
 									{...register('icloudSourceAlbum')}
 									label="Source Album Name"
@@ -211,7 +211,7 @@ export function ConfigurationForm({
 							</Grid>
 
 							{onTestICloud && (
-								<Grid item xs={12}>
+								<Grid size={12}>
 									<Button
 										variant="outlined"
 										onClick={handleTestICloud}
@@ -233,14 +233,14 @@ export function ConfigurationForm({
 				</Grid>
 
 				{/* Frame TV Configuration Section */}
-				<Grid item xs={12}>
+				<Grid size={12}>
 					<Paper sx={{ p: 3 }}>
 						<Typography variant="h6" gutterBottom>
 							Frame TV Configuration
 						</Typography>
 
 						<Grid container spacing={2}>
-							<Grid item xs={12} sm={8}>
+							<Grid size={{ xs: 12, sm: 8 }}>
 								<TextField
 									{...register('frameHost')}
 									label="Frame TV IP or Hostname"
@@ -251,7 +251,7 @@ export function ConfigurationForm({
 								/>
 							</Grid>
 
-							<Grid item xs={12} sm={4}>
+							<Grid size={{ xs: 12, sm: 4 }}>
 								<TextField
 									{...register('framePort', { valueAsNumber: true })}
 									label="Port"
@@ -264,7 +264,7 @@ export function ConfigurationForm({
 							</Grid>
 
 							{onTestFrame && (
-								<Grid item xs={12}>
+								<Grid size={12}>
 									<Button
 										variant="outlined"
 										onClick={handleTestFrame}
@@ -286,14 +286,14 @@ export function ConfigurationForm({
 				</Grid>
 
 				{/* Sync Configuration Section */}
-				<Grid item xs={12}>
+				<Grid size={12}>
 					<Paper sx={{ p: 3 }}>
 						<Typography variant="h6" gutterBottom>
 							Sync Configuration
 						</Typography>
 
 						<Grid container spacing={2}>
-							<Grid item xs={12} sm={6}>
+							<Grid size={{ xs: 12, sm: 6 }}>
 								<TextField
 									{...register('syncInterval', { valueAsNumber: true })}
 									label="Sync Interval (seconds)"
@@ -305,7 +305,7 @@ export function ConfigurationForm({
 								/>
 							</Grid>
 
-							<Grid item xs={12} sm={6}>
+							<Grid size={{ xs: 12, sm: 6 }}>
 								<TextField
 									{...register('maxRetries', { valueAsNumber: true })}
 									label="Max Retries"
@@ -317,14 +317,14 @@ export function ConfigurationForm({
 								/>
 							</Grid>
 
-							<Grid item xs={12}>
+							<Grid size={12}>
 								<FormControlLabel
 									control={<Switch {...register('syncEnabled')} checked={syncEnabled} />}
 									label="Enable Automatic Sync"
 								/>
 							</Grid>
 
-							<Grid item xs={12}>
+							<Grid size={12}>
 								<FormControlLabel
 									control={<Switch {...register('deleteAfterSync')} checked={deleteAfterSync} />}
 									label="Delete Photos After Sync"
@@ -335,7 +335,7 @@ export function ConfigurationForm({
 				</Grid>
 
 				{/* Submit Button */}
-				<Grid item xs={12}>
+				<Grid size={12}>
 					<Button
 						type="submit"
 						variant="contained"

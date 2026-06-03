@@ -74,7 +74,7 @@ export default function Dashboard() {
 
 	if (loading) {
 		return (
-			<Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
+			<Stack sx={{ py: 6, alignItems: "center", justifyContent: "center" }}>
 				<CircularProgress />
 				<Typography variant="body1" sx={{ mt: 2 }}>
 					Loading dashboard...

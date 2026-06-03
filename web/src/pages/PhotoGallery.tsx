@@ -221,7 +221,7 @@ export default function PhotoGallery() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }}>
             <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
               <PhotoLibraryIcon />
             </Avatar>
@@ -235,7 +235,7 @@ export default function PhotoGallery() {
             </Box>
           </Stack>
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'center' } }}>
             <FormControl sx={{ minWidth: 240 }} disabled={loadingAlbums || !hasAlbums}>
               <InputLabel id="album-select-label">Select Album</InputLabel>
               <Select
@@ -277,7 +277,7 @@ export default function PhotoGallery() {
       {loadingPhotos ? (
         <Grid container spacing={3}>
           {[...Array(6)].map((_, index) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={index}>
               <Card>
                 <Skeleton variant="rectangular" height={200} />
                 <CardContent>
@@ -318,10 +318,8 @@ export default function PhotoGallery() {
         <Box>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
-            justifyContent="space-between"
-            alignItems={{ xs: 'flex-start', md: 'center' }}
             spacing={2}
-            sx={{ mb: 3 }}
+            sx={{ mb: 3, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' } }}
           >
             <Box>
               <Typography variant="h6" gutterBottom>
@@ -360,7 +358,7 @@ export default function PhotoGallery() {
 
           <Grid container spacing={3}>
             {photoPage.items.map((photo: PhotoSummary) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={photo.id}>
+              <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={photo.id}>
                 <Card
                   sx={{
                     height: '100%',

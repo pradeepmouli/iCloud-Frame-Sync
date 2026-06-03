@@ -402,10 +402,10 @@ export default function FrameManager() {
       </Stack>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }}>
                 <Avatar sx={{ bgcolor: 'secondary.main', width: 48, height: 48 }}>
                   <TvIcon />
                 </Avatar>
@@ -421,7 +421,7 @@ export default function FrameManager() {
                 <LinearProgress sx={{ mt: 2 }} />
               ) : status ? (
                 <Stack spacing={1} sx={{ mb: 2 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <Chip
                       label={status.isReachable ? 'Reachable' : 'Offline'}
                       color={status.isReachable ? 'success' : 'warning'}
@@ -446,7 +446,7 @@ export default function FrameManager() {
                   <Typography variant="body2">
                     Last Checked: {formatDate(status.lastCheckedAt)}
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <LightbulbIcon fontSize="small" />
                     <Typography variant="body2">
                       Brightness: {status.brightness ?? '—'}
@@ -518,10 +518,10 @@ export default function FrameManager() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }}>
                 <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
                   <CloudUploadIcon />
                 </Avatar>
@@ -564,10 +564,10 @@ export default function FrameManager() {
           </Card>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Card>
             <CardContent>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+              <Stack direction="row" sx={{ mb: 2, alignItems: "center", justifyContent: "space-between" }}>
                 <Typography variant="h6">Available Art</Typography>
                 <Stack direction="row" spacing={1}>
                   <Button
@@ -616,7 +616,7 @@ export default function FrameManager() {
                     {artPage.items.map((art: FrameArtSummary) => {
                       const isCurrent = status?.currentArt?.id === art.id;
                       return (
-                        <Grid item xs={12} sm={6} md={4} lg={3} key={art.id}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={art.id}>
                           <Card
                             variant={isCurrent ? 'outlined' : undefined}
                             sx={{
@@ -633,7 +633,7 @@ export default function FrameManager() {
                               height="180"
                             />
                             <CardContent>
-                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: "center" }}>
                                 <ImageIcon color={isCurrent ? 'primary' : 'disabled'} />
                                 <Typography variant="subtitle1" noWrap>
                                   {art.name}

@@ -192,7 +192,7 @@ export default function Authentication() {
 			{authStatus && (
 				<Card sx={{ mb: 3 }}>
 					<CardContent>
-						<Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+						<Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }}>
 							<Avatar sx={{ bgcolor: 'success.main', width: 48, height: 48 }}>
 								<CheckCircleIcon />
 							</Avatar>
@@ -209,7 +209,7 @@ export default function Authentication() {
 
 						{authStatus.userInfo && (
 							<Box sx={{ mt: 2 }}>
-								<Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+								<Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: "center" }}>
 									<PersonIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
 									<Typography variant="body1" fontWeight={600}>
 										{authStatus.userInfo.fullName}
@@ -227,7 +227,7 @@ export default function Authentication() {
 			{!authStatus && (
 				<Card>
 					<CardContent>
-						<Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+						<Stack direction="row" spacing={2} sx={{ mb: 3, alignItems: "center" }}>
 							<Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
 								<CloudIcon />
 							</Avatar>
@@ -292,7 +292,7 @@ export default function Authentication() {
 
 			<Card sx={{ mt: 3 }}>
 				<CardContent>
-					<Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+					<Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }}>
 						<SecurityIcon color="primary" />
 						<Typography variant="h6">Security & Privacy</Typography>
 					</Stack>

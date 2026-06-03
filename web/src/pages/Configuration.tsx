@@ -279,7 +279,7 @@ export default function Configuration() {
       </Stack>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} lg={8}>
+        <Grid size={{ xs: 12, lg: 8 }}>
           <Card>
             <CardContent>
               <ConfigurationForm
@@ -303,11 +303,11 @@ export default function Configuration() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={4}>
+        <Grid size={{ xs: 12, lg: 4 }}>
           <Stack spacing={3}>
             <Card>
               <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                <Stack direction="row" spacing={2} sx={{ mb: 3, alignItems: "center" }}>
                   <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
                     <RefreshIcon />
                   </Avatar>
@@ -346,7 +346,7 @@ export default function Configuration() {
                       </Alert>
                       <Stack spacing={1.5}>
                         <Stack spacing={1}>
-                          <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                             <Chip
                               size="small"
                               color={
@@ -385,7 +385,7 @@ export default function Configuration() {
                         </Stack>
 
                         <Stack spacing={1}>
-                          <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                             <Chip
                               size="small"
                               color={connectionResult.frame.success ? 'success' : 'error'}

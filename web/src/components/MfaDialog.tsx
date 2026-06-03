@@ -84,7 +84,7 @@ export default function MfaDialog({
       }}
     >
       <DialogTitle>
-        <Stack direction="row" alignItems="center" spacing={2}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
           <SecurityIcon
             sx={{
               color: 'primary.main',
@@ -116,9 +116,8 @@ export default function MfaDialog({
         {/* Device Icons */}
         <Stack
           direction="row"
-          justifyContent="center"
           spacing={3}
-          sx={{ mb: 3 }}
+          sx={{ mb: 3, justifyContent: "center" }}
         >
           <Box sx={{ textAlign: 'center', opacity: 0.7 }}>
             <PhoneIcon
