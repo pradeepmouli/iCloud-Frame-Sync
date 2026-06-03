@@ -21,7 +21,7 @@ import {
 	Typography,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../services/api';
 import type { AlbumSummary, PhotoPage, PhotoSummary } from '../types/index';
@@ -307,7 +307,7 @@ export default function PhotoGallery() {
             <Button
               variant="contained"
               startIcon={<RefreshIcon />}
-              onClick={selectedAlbumId ? handleRefreshPhotos : loadAlbums}
+              onClick={selectedAlbumId ? handleRefreshPhotos : () => void loadAlbums()}
               disabled={loadingPhotos || loadingAlbums}
             >
               Refresh

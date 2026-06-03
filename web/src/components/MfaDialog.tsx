@@ -75,11 +75,13 @@ export default function MfaDialog({
       onClose={() => {}} // Prevent closing by clicking outside
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          backgroundColor: alpha('#ffffff', 0.05),
-          backdropFilter: 'blur(20px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+      slotProps={{
+        paper: {
+          sx: {
+            backgroundColor: alpha('#ffffff', 0.05),
+            backdropFilter: 'blur(20px) saturate(180%)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          },
         },
       }}
     >
@@ -123,7 +125,7 @@ export default function MfaDialog({
             <PhoneIcon
               sx={{ fontSize: 32, mb: 0.5, color: 'text.secondary' }}
             />
-            <Typography variant="caption" display="block">
+            <Typography variant="caption" sx={{ display: 'block' }}>
               iPhone
             </Typography>
           </Box>
@@ -131,7 +133,7 @@ export default function MfaDialog({
             <WatchIcon
               sx={{ fontSize: 32, mb: 0.5, color: 'text.secondary' }}
             />
-            <Typography variant="caption" display="block">
+            <Typography variant="caption" sx={{ display: 'block' }}>
               Apple Watch
             </Typography>
           </Box>
@@ -139,7 +141,7 @@ export default function MfaDialog({
             <ComputerIcon
               sx={{ fontSize: 32, mb: 0.5, color: 'text.secondary' }}
             />
-            <Typography variant="caption" display="block">
+            <Typography variant="caption" sx={{ display: 'block' }}>
               Mac
             </Typography>
           </Box>
@@ -159,14 +161,16 @@ export default function MfaDialog({
           variant="outlined"
           disabled={loading}
           autoFocus
-          inputProps={{
-            maxLength: 6,
-            style: {
-              textAlign: 'center',
-              fontSize: '1.5rem',
-              letterSpacing: '0.5rem',
-              fontFamily: 'monospace',
-              fontWeight: 'bold',
+          slotProps={{
+            htmlInput: {
+              maxLength: 6,
+              style: {
+                textAlign: 'center',
+                fontSize: '1.5rem',
+                letterSpacing: '0.5rem',
+                fontFamily: 'monospace',
+                fontWeight: 'bold',
+              },
             },
           }}
           helperText="Enter the 6-digit code from your Apple device"

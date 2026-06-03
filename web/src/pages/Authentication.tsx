@@ -211,7 +211,7 @@ export default function Authentication() {
 							<Box sx={{ mt: 2 }}>
 								<Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: "center" }}>
 									<PersonIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-									<Typography variant="body1" fontWeight={600}>
+									<Typography variant="body1" sx={{ fontWeight: 600 }}>
 										{authStatus.userInfo.fullName}
 									</Typography>
 								</Stack>
@@ -266,12 +266,14 @@ export default function Authentication() {
 								variant="outlined"
 								disabled={loading}
 								autoComplete="current-password"
-								InputProps={{
-									endAdornment: (
-										<IconButton onClick={() => setShowPassword((current) => !current)} edge="end" disabled={loading}>
-											{showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-										</IconButton>
-									),
+								slotProps={{
+									input: {
+										endAdornment: (
+											<IconButton onClick={() => setShowPassword((current) => !current)} edge="end" disabled={loading}>
+												{showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+											</IconButton>
+										),
+									},
 								}}
 							/>
 
