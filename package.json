@@ -42,7 +42,7 @@
 		"@tanstack/react-query": "^5.100.9",
 		"@types/cors": "^2.8.19",
 		"@types/express": "^5.0.4",
-		"@types/react": "^19.2.14",
+		"@types/react": "^19.2.15",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^5.1.0",
 		"commander": "^14.0.2",
@@ -81,8 +81,8 @@
 		"@types/sinon": "^21.0.1",
 		"@types/supertest": "^7.2.0",
 		"@types/tough-cookie": "^4.0.5",
-		"@typescript-eslint/eslint-plugin": "^8.58.2",
-		"@typescript-eslint/parser": "^8.58.2",
+		"@typescript-eslint/eslint-plugin": "^8.59.4",
+		"@typescript-eslint/parser": "^8.59.4",
 		"chai": "^6.2.2",
 		"deno": "^2.5.4",
 		"eslint": "^9.38.0",
@@ -102,7 +102,7 @@
 		"tsx": "^4.20.6",
 		"type-fest": "^5.1.0",
 		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.58.2",
+		"typescript-eslint": "^8.59.4",
 		"typescript-eslint-parser": "^22.0.0",
 		"vitest": "^2.1.3"
 	}
