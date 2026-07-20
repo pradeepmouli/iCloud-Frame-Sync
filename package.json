@@ -79,10 +79,10 @@
 		"@types/node-fetch": "^2.6.12",
 		"@types/sharp": "^0.32.0",
 		"@types/sinon": "^21.0.1",
-		"@types/supertest": "^7.2.0",
+		"@types/supertest": "^7.2.1",
 		"@types/tough-cookie": "^4.0.5",
-		"@typescript-eslint/eslint-plugin": "^8.58.2",
-		"@typescript-eslint/parser": "^8.58.2",
+		"@typescript-eslint/eslint-plugin": "^8.64.0",
+		"@typescript-eslint/parser": "^8.64.0",
 		"chai": "^6.2.2",
 		"deno": "^2.5.4",
 		"eslint": "^9.38.0",
@@ -102,7 +102,7 @@
 		"tsx": "^4.20.6",
 		"type-fest": "^5.1.0",
 		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.58.2",
+		"typescript-eslint": "^8.64.0",
 		"typescript-eslint-parser": "^22.0.0",
 		"vitest": "^2.1.3"
 	}
