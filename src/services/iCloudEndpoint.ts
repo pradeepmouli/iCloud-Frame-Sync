@@ -5,8 +5,12 @@ import type {
 } from 'icloudjs';
 import iCloudService from 'icloudjs';
 import type { Logger } from 'pino';
-import type { iCloudConfig } from 'types/endpoint.js';
-import type { Album, Endpoint, Photo } from '../types/endpoint.js';
+import type {
+	Album,
+	Endpoint,
+	iCloudConfig,
+	Photo,
+} from '../types/endpoint.js';
 
 import exif from 'exif-reader';
 
@@ -121,7 +125,7 @@ export class iCloudEndpoint implements Endpoint {
 	private logger: Logger;
 	private config: iCloudConfig;
 	private iCloudClient: iCloudService.default;
-	private photosService: iCloudPhotosService;
+	private photosService!: iCloudPhotosService;
 	private _photos: iCloudPhoto[] = [];
 	private _albums: Map<string, Album> = new Map();
 

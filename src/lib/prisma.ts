@@ -14,6 +14,11 @@ import { createLogger } from '../observability/logger.js';
 
 const logger = createLogger({ name: 'prisma' });
 
+type TransactionClient = Omit<
+	PrismaClient,
+	'$connect' | '$disconnect' | '$extends' | '$on' | '$transaction'
+>;
+
 // Global augmentation for PrismaClient instance
 const globalForPrisma = globalThis as unknown as {
 	prisma: PrismaClient | undefined;
@@ -93,12 +98,7 @@ export async function testConnection(): Promise<void> {
  * @returns Promise resolving to function result
  */
 export async function withTransaction<T>(
-	fn: (
-		_tx: Omit<
-			PrismaClient,
-			'$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
-		>,
-	) => Promise<T>,
+	fn: (_tx: TransactionClient) => Promise<T>,
 ): Promise<T> {
 	return prisma.$transaction(fn);
 }
@@ -116,12 +116,7 @@ export async function withTransaction<T>(
  * @throws Error if all retry attempts fail
  */
 export async function withTransactionRetry<T>(
-	fn: (
-		_tx: Omit<
-			PrismaClient,
-			'$connect' | '$disconnect' | '$on' | '$transaction' | '$use'
-		>,
-	) => Promise<T>,
+	fn: (_tx: TransactionClient) => Promise<T>,
 	maxRetries: number = 3,
 	retryDelay: number = 100,
 ): Promise<T> {

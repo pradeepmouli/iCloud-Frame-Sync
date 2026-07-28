@@ -53,9 +53,11 @@ export async function getExifDataFromPhoto(
 ): Promise<exifReader.Exif | null> {
 	if (!photo || typeof photo.download !== 'function')
 		return Promise.resolve(null);
-	return photo.download().then((buffer: Buffer) => {
+	return photo.download().then((buffer: Buffer | Uint8Array) => {
 		try {
-			const exif = exifReader(buffer);
+			const exif = exifReader(
+				Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer),
+			);
 			return exif;
 		} catch {
 			return null;

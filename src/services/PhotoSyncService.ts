@@ -55,7 +55,7 @@ export class PhotoSyncService {
 	private readonly maxRetries: number;
 	private readonly baseDelayMs = 500;
 	private readonly webPort: number;
-	private currentSettings: SettingsConfigSnapshot;
+	private currentSettings!: SettingsConfigSnapshot;
 	private readonly initialFrameHost: string;
 	private readonly initialSyncIntervalSeconds?: number;
 	private stateStoreInitialized = false;

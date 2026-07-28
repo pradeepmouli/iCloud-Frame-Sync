@@ -7,7 +7,7 @@
 		"sourceMap": true,
 		"target": "ES2024",
 		"outDir": "./dist",
-		"baseUrl": "./src",
+		"rootDir": "./src",
 		"experimentalDecorators": true,
 		"typeRoots": [
 			"./src/types"

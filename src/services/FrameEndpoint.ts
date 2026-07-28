@@ -10,6 +10,7 @@ import {
 	type SamsungFrameClientOptions,
 	type SamsungFrameClientType,
 } from 'samsung-frame-connect';
+import { resolveErrorMessage } from '../lib/errors.js';
 import type { Endpoint, FrameConfig, Photo } from '../types/endpoint.js';
 import { ThumbnailService } from './ThumbnailService.js';
 
@@ -519,7 +520,7 @@ export class FrameEndpoint implements Endpoint {
 				`Populated ${this._photos.length} photos from Samsung Frame.`,
 			);
 		} catch (error) {
-			this.logger.error(`Failed to populate photos: ${error.message}`);
+			this.logger.error(`Failed to populate photos: ${resolveErrorMessage(error)}`);
 		}
 	}
 
@@ -546,7 +547,7 @@ export class FrameEndpoint implements Endpoint {
 				: contentList;
 		} catch (error) {
 			this.logger.error(
-				`Failed to get available art by category: ${error.message}`,
+				`Failed to get available art by category: ${resolveErrorMessage(error)}`,
 			);
 			return [];
 		}
@@ -861,7 +862,7 @@ export class FrameEndpoint implements Endpoint {
 
 			return thumbnails;
 		} catch (error) {
-			this.logger.error(`Failed to get thumbnail list: ${error.message}`);
+			this.logger.error(`Failed to get thumbnail list: ${resolveErrorMessage(error)}`);
 			return [];
 		}
 	}
@@ -1152,7 +1153,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.withClient(() => this.client.getCurrentArt());
 		} catch (error) {
-			this.logger.error(`Failed to get current art: ${error.message}`);
+			this.logger.error(`Failed to get current art: ${resolveErrorMessage(error)}`);
 			return null;
 		}
 	}
@@ -1162,7 +1163,7 @@ export class FrameEndpoint implements Endpoint {
 			await this.client.setCurrentArt({ id: artId, category });
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set current art: ${error.message}`);
+			this.logger.error(`Failed to set current art: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1172,7 +1173,7 @@ export class FrameEndpoint implements Endpoint {
 			await this.client.deleteArt(artIds);
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to delete art: ${error.message}`);
+			this.logger.error(`Failed to delete art: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1181,7 +1182,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.withClient(() => this.client.getBrightness());
 		} catch (error) {
-			this.logger.error(`Failed to get brightness: ${error.message}`);
+			this.logger.error(`Failed to get brightness: ${resolveErrorMessage(error)}`);
 			return 0;
 		}
 	}
@@ -1191,7 +1192,7 @@ export class FrameEndpoint implements Endpoint {
 			await this.client.setBrightness(value);
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set brightness: ${error.message}`);
+			this.logger.error(`Failed to set brightness: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1200,7 +1201,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.withClient(() => this.client.inArtMode());
 		} catch (error) {
-			this.logger.error(`Failed to check art mode: ${error.message}`);
+			this.logger.error(`Failed to check art mode: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1209,7 +1210,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.client.getMatteColors();
 		} catch (error) {
-			this.logger.error(`Failed to get matte colors: ${error.message}`);
+			this.logger.error(`Failed to get matte colors: ${resolveErrorMessage(error)}`);
 			return [];
 		}
 	}
@@ -1218,7 +1219,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.client.getMatteTypes();
 		} catch (error) {
-			this.logger.error(`Failed to get matte types: ${error.message}`);
+			this.logger.error(`Failed to get matte types: ${resolveErrorMessage(error)}`);
 			return [];
 		}
 	}
@@ -1228,7 +1229,7 @@ export class FrameEndpoint implements Endpoint {
 			await this.client.setMatte({ id: artId, type, color });
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set matte: ${error.message}`);
+			this.logger.error(`Failed to set matte: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1246,7 +1247,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set favourite: ${error.message}`);
+			this.logger.error(`Failed to set favourite: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1261,7 +1262,7 @@ export class FrameEndpoint implements Endpoint {
 				? data.find((item: any) => item.item === setting) || data
 				: data;
 		} catch (error) {
-			this.logger.error(`Failed to get art mode settings: ${error.message}`);
+			this.logger.error(`Failed to get art mode settings: ${resolveErrorMessage(error)}`);
 			return null;
 		}
 	}
@@ -1272,7 +1273,7 @@ export class FrameEndpoint implements Endpoint {
 				request: 'get_auto_rotation_status',
 			});
 		} catch (error) {
-			this.logger.error(`Failed to get auto rotation status: ${error.message}`);
+			this.logger.error(`Failed to get auto rotation status: ${resolveErrorMessage(error)}`);
 			return null;
 		}
 	}
@@ -1291,7 +1292,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set auto rotation status: ${error.message}`);
+			this.logger.error(`Failed to set auto rotation status: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1302,7 +1303,7 @@ export class FrameEndpoint implements Endpoint {
 				request: 'get_slideshow_status',
 			});
 		} catch (error) {
-			this.logger.error(`Failed to get slideshow status: ${error.message}`);
+			this.logger.error(`Failed to get slideshow status: ${resolveErrorMessage(error)}`);
 			return null;
 		}
 	}
@@ -1321,7 +1322,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set slideshow status: ${error.message}`);
+			this.logger.error(`Failed to set slideshow status: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1336,7 +1337,7 @@ export class FrameEndpoint implements Endpoint {
 			}
 			return response;
 		} catch (error) {
-			this.logger.error(`Failed to get color temperature: ${error.message}`);
+			this.logger.error(`Failed to get color temperature: ${resolveErrorMessage(error)}`);
 			return null;
 		}
 	}
@@ -1349,7 +1350,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set color temperature: ${error.message}`);
+			this.logger.error(`Failed to set color temperature: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1361,7 +1362,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return response.current_rotation_status || 0;
 		} catch (error) {
-			this.logger.error(`Failed to get current rotation: ${error.message}`);
+			this.logger.error(`Failed to get current rotation: ${resolveErrorMessage(error)}`);
 			return 0;
 		}
 	}
@@ -1373,7 +1374,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return JSON.parse(response.filter_list);
 		} catch (error) {
-			this.logger.error(`Failed to get photo filter list: ${error.message}`);
+			this.logger.error(`Failed to get photo filter list: ${resolveErrorMessage(error)}`);
 			return [];
 		}
 	}
@@ -1387,7 +1388,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set photo filter: ${error.message}`);
+			this.logger.error(`Failed to set photo filter: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1404,7 +1405,7 @@ export class FrameEndpoint implements Endpoint {
 			}
 			return matteTypes;
 		} catch (error) {
-			this.logger.error(`Failed to get matte list: ${error.message}`);
+			this.logger.error(`Failed to get matte list: ${resolveErrorMessage(error)}`);
 			return includeColor ? { types: [], colors: [] } : [];
 		}
 	}
@@ -1428,7 +1429,7 @@ export class FrameEndpoint implements Endpoint {
 			await this.client.request(request);
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to change matte: ${error.message}`);
+			this.logger.error(`Failed to change matte: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1447,7 +1448,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to select image: ${error.message}`);
+			this.logger.error(`Failed to select image: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1459,7 +1460,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return response.value;
 		} catch (error) {
-			this.logger.error(`Failed to get art mode status: ${error.message}`);
+			this.logger.error(`Failed to get art mode status: ${resolveErrorMessage(error)}`);
 			return 'off';
 		}
 	}
@@ -1472,7 +1473,7 @@ export class FrameEndpoint implements Endpoint {
 			});
 			return true;
 		} catch (error) {
-			this.logger.error(`Failed to set art mode status: ${error.message}`);
+			this.logger.error(`Failed to set art mode status: ${resolveErrorMessage(error)}`);
 			return false;
 		}
 	}
@@ -1481,7 +1482,7 @@ export class FrameEndpoint implements Endpoint {
 		try {
 			return await this.client.getAvailableArt();
 		} catch (error) {
-			this.logger.error(`Failed to get raw available art: ${error.message}`);
+			this.logger.error(`Failed to get raw available art: ${resolveErrorMessage(error)}`);
 			return [];
 		}
 	}
@@ -1509,7 +1510,7 @@ export class FrameEndpoint implements Endpoint {
 			return { id: photoId, isCurrent: false };
 		} catch (error) {
 			this.logger.error(
-				`Failed to get art info for ${photoId}: ${error.message}`,
+				`Failed to get art info for ${photoId}: ${resolveErrorMessage(error)}`,
 			);
 			return { id: photoId, isCurrent: false };
 		}
@@ -1538,7 +1539,7 @@ export class FrameEndpoint implements Endpoint {
 			return Buffer.alloc(0);
 		} catch (error) {
 			this.logger.debug(
-				`Alternative thumbnail method failed for ${photoId}: ${error.message}`,
+				`Alternative thumbnail method failed for ${photoId}: ${resolveErrorMessage(error)}`,
 			);
 			return Buffer.alloc(0);
 		}
