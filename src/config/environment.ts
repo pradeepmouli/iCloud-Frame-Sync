@@ -61,20 +61,11 @@ export function createAppConfigFromEnv(): AppConfig {
 	const frameHost = readRequiredEnv('SAMSUNG_FRAME_HOST');
 
 	// Optional with defaults
-	const iCloudSourceAlbum = getEnvOrDefault(
-		'ICLOUD_SOURCE_ALBUM',
-		'Frame Sync',
-	);
-	const iCloudDataDirectory = path.resolve(
-		getEnvOrDefault('ICLOUD_DATA_DIRECTORY', 'data'),
-	);
-	const syncIntervalSeconds = Number(
-		getEnvOrDefault('ICLOUD_SYNC_INTERVAL', '60'),
-	);
+	const iCloudSourceAlbum = getEnvOrDefault('ICLOUD_SOURCE_ALBUM', 'Frame Sync');
+	const iCloudDataDirectory = path.resolve(getEnvOrDefault('ICLOUD_DATA_DIRECTORY', 'data'));
+	const syncIntervalSeconds = Number(getEnvOrDefault('ICLOUD_SYNC_INTERVAL', '60'));
 	const logLevel = getEnvOrDefault('LOG_LEVEL', 'info');
-	const frameVerbosity = Number(
-		getEnvOrDefault('SAMSUNG_FRAME_VERBOSITY', '0'),
-	);
+	const frameVerbosity = Number(getEnvOrDefault('SAMSUNG_FRAME_VERBOSITY', '0'));
 	const webPort = process.env.WEB_PORT ? Number(process.env.WEB_PORT) : 3001;
 	const corsOrigin = getEnvOrDefault('CORS_ORIGIN', 'http://localhost:3000');
 

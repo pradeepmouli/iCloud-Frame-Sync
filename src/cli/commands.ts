@@ -19,12 +19,8 @@ import {
 const require = createRequire(import.meta.url);
 const serviceRunnerModuleUrl = new URL('./service-runner.js', import.meta.url);
 const compiledServiceRunnerPath = fileURLToPath(serviceRunnerModuleUrl);
-const sourceServiceRunnerPath = compiledServiceRunnerPath.replace(
-	/\.js$/,
-	'.ts',
-);
-const isTestEnvironment =
-	process.env.NODE_ENV === 'test' && process.env.CLI_TEST_MODE !== 'false';
+const sourceServiceRunnerPath = compiledServiceRunnerPath.replace(/\.js$/, '.ts');
+const isTestEnvironment = process.env.NODE_ENV === 'test' && process.env.CLI_TEST_MODE !== 'false';
 
 let cachedTsxCli: string | null = null;
 
@@ -50,9 +46,7 @@ async function spawnService(): Promise<number> {
 		if (existsSync(sourceServiceRunnerPath)) {
 			return [resolveTsxCli(), sourceServiceRunnerPath];
 		}
-		throw new Error(
-			'Unable to resolve service runner entrypoint. Have you run `pnpm run build`?',
-		);
+		throw new Error('Unable to resolve service runner entrypoint. Have you run `pnpm run build`?');
 	})();
 
 	return await new Promise<number>((resolve, reject) => {
@@ -158,9 +152,7 @@ async function handleStatus(): Promise<void> {
 	}
 
 	if (runtime.mode === 'mock' || runtime.pid <= 0) {
-		console.log(
-			`Sync service status: running (mock), started at ${runtime.startedAt}.`,
-		);
+		console.log(`Sync service status: running (mock), started at ${runtime.startedAt}.`);
 		return;
 	}
 
@@ -201,9 +193,7 @@ async function handleStop(): Promise<void> {
 
 	if (!isProcessActive(runtime.pid)) {
 		await clearRuntime();
-		console.log(
-			'Sync service stopped successfully (stale runtime metadata cleared).',
-		);
+		console.log('Sync service stopped successfully (stale runtime metadata cleared).');
 		return;
 	}
 

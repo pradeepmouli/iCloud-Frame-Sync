@@ -73,8 +73,7 @@ export class PhotoSyncService {
 		options?: PhotoSyncServiceOptions,
 	) {
 		this.sourceAlbum = config?.iCloud?.sourceAlbum ?? 'Default Album';
-		this.maxRetries =
-			(config as unknown as { maxRetries?: number })?.maxRetries ?? 3;
+		this.maxRetries = (config as unknown as { maxRetries?: number })?.maxRetries ?? 3;
 		this.initialFrameHost = config?.frame?.host ?? 'unknown-frame';
 		this.initialSyncIntervalSeconds = (
 			config as unknown as { syncIntervalSeconds?: number }
@@ -105,8 +104,7 @@ export class PhotoSyncService {
 		this.iCloudEndpointPassword = iCloudConfig.password;
 
 		this.stateStore =
-			options?.stateStore ??
-			new SyncStateStore(this.logger.child({ name: 'StateStore' }));
+			options?.stateStore ?? new SyncStateStore(this.logger.child({ name: 'StateStore' }));
 
 		this.syncStateService = options?.syncStateService;
 
@@ -135,22 +133,13 @@ export class PhotoSyncService {
 
 	private getMissingConfigFields(): string[] {
 		const missing: string[] = [];
-		if (
-			!this.config?.iCloud?.username ||
-			this.config.iCloud.username.trim().length === 0
-		) {
+		if (!this.config?.iCloud?.username || this.config.iCloud.username.trim().length === 0) {
 			missing.push('ICLOUD_USERNAME');
 		}
-		if (
-			!this.config?.iCloud?.password ||
-			this.config.iCloud.password.trim().length === 0
-		) {
+		if (!this.config?.iCloud?.password || this.config.iCloud.password.trim().length === 0) {
 			missing.push('ICLOUD_PASSWORD');
 		}
-		if (
-			!this.config?.frame?.host ||
-			this.config.frame.host.trim().length === 0
-		) {
+		if (!this.config?.frame?.host || this.config.frame.host.trim().length === 0) {
 			missing.push('SAMSUNG_FRAME_HOST');
 		}
 		return missing;
@@ -162,8 +151,7 @@ export class PhotoSyncService {
 			syncAlbumName: this.sourceAlbum,
 			frameHost: this.config.frame?.host ?? '',
 			syncIntervalSeconds:
-				this.currentSettings?.syncIntervalSeconds ??
-				this.initialSyncIntervalSeconds,
+				this.currentSettings?.syncIntervalSeconds ?? this.initialSyncIntervalSeconds,
 			logLevel: this.currentSettings?.logLevel,
 			corsOrigin: this.currentSettings?.corsOrigin,
 			webPort: this.webPort,
@@ -195,10 +183,7 @@ export class PhotoSyncService {
 					...this.config.frame,
 					services: (this.config.frame?.services || []).map(String),
 				};
-				this.frameEndpoint = new FrameEndpoint(
-					frameConfig,
-					this.logger.child({ name: 'Frame' }),
-				);
+				this.frameEndpoint = new FrameEndpoint(frameConfig, this.logger.child({ name: 'Frame' }));
 				this.frameEndpointHost = frameConfig.host;
 			}
 		}
@@ -212,8 +197,7 @@ export class PhotoSyncService {
 			) {
 				const iCloudConfig: iCloudConfig = {
 					...this.config.iCloud,
-					dataDirectory:
-						this.config.iCloud?.dataDirectory ?? path.resolve('data'),
+					dataDirectory: this.config.iCloud?.dataDirectory ?? path.resolve('data'),
 				};
 				this.iCloudEndpoint = new iCloudEndpoint(
 					iCloudConfig,
@@ -242,9 +226,7 @@ export class PhotoSyncService {
 		const missing = this.getMissingConfigFields();
 		if (missing.length > 0) {
 			this.ready = false;
-			this.initializationError = new Error(
-				`Missing configuration: ${missing.join(', ')}`,
-			);
+			this.initializationError = new Error(`Missing configuration: ${missing.join(', ')}`);
 			this.logger.warn(
 				{ missing },
 				'Configuration incomplete. Deferring endpoint initialization until setup is complete.',
@@ -257,8 +239,7 @@ export class PhotoSyncService {
 			await this.iCloudEndpoint.initialize();
 		} catch (error) {
 			this.ready = false;
-			this.initializationError =
-				error instanceof Error ? error : new Error(String(error));
+			this.initializationError = error instanceof Error ? error : new Error(String(error));
 			this.logger.error(
 				{ error: this.initializationError?.message },
 				'Failed to initialize Photo Sync Service. Continuing in setup mode.',
@@ -271,8 +252,7 @@ export class PhotoSyncService {
 			await this.frameEndpoint.initialize();
 		} catch (error) {
 			this.ready = false;
-			this.initializationError =
-				error instanceof Error ? error : new Error(String(error));
+			this.initializationError = error instanceof Error ? error : new Error(String(error));
 			this.logger.error(
 				{ error: this.initializationError?.message },
 				'Failed to initialize Photo Sync Service. Continuing in setup mode.',
@@ -297,15 +277,11 @@ export class PhotoSyncService {
 	async syncPhotos(): Promise<SyncSummary> {
 		if (!this.ready) {
 			throw new SetupRequiredError(
-				this.initializationError?.message ??
-					'Sync service must be configured before running.',
+				this.initializationError?.message ?? 'Sync service must be configured before running.',
 			);
 		}
 
-		this.logger.info(
-			{ albumId: this.sourceAlbum },
-			'Starting incremental photo sync...',
-		);
+		this.logger.info({ albumId: this.sourceAlbum }, 'Starting incremental photo sync...');
 
 		const startTime = Date.now();
 		let processed = 0;
@@ -315,9 +291,7 @@ export class PhotoSyncService {
 		const processedPhotoIds: string[] = [];
 
 		try {
-			const lastSyncTimestamp = await this.stateStore.getAlbumLastSyncTimestamp(
-				this.sourceAlbum,
-			);
+			const lastSyncTimestamp = await this.stateStore.getAlbumLastSyncTimestamp(this.sourceAlbum);
 			this.logger.debug(
 				{ albumId: this.sourceAlbum, lastSyncTimestamp },
 				'Fetching photos for incremental sync',
@@ -352,11 +326,7 @@ export class PhotoSyncService {
 					skipped++;
 					// Emit progress update
 					if (this.syncStateService) {
-						void this.syncStateService.updateProgress(
-							processed,
-							failed,
-							skipped,
-						);
+						void this.syncStateService.updateProgress(processed, failed, skipped);
 					}
 					continue;
 				}
@@ -373,11 +343,7 @@ export class PhotoSyncService {
 					skipped++;
 					// Emit progress update
 					if (this.syncStateService) {
-						void this.syncStateService.updateProgress(
-							processed,
-							failed,
-							skipped,
-						);
+						void this.syncStateService.updateProgress(processed, failed, skipped);
 					}
 					continue;
 				}
@@ -396,16 +362,10 @@ export class PhotoSyncService {
 							retryCount: attempt,
 						});
 
-						this.logger.debug(
-							{ photoId: photo.id, attempt },
-							'Downloading photo',
-						);
+						this.logger.debug({ photoId: photo.id, attempt }, 'Downloading photo');
 						const photoData = await photo.download();
 
-						const checksum = crypto
-							.createHash('sha256')
-							.update(photoData)
-							.digest('hex');
+						const checksum = crypto.createHash('sha256').update(photoData).digest('hex');
 
 						await this.stateStore.updatePhotoState(photo.id, {
 							checksum,
@@ -447,12 +407,7 @@ export class PhotoSyncService {
 
 						// Emit progress update after successful upload
 						if (this.syncStateService) {
-							void this.syncStateService.updateProgress(
-								processed,
-								failed,
-								skipped,
-								photo.id,
-							);
+							void this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
 						}
 						break;
 					} catch (error) {
@@ -477,12 +432,7 @@ export class PhotoSyncService {
 
 						// Emit progress update after failure
 						if (this.syncStateService) {
-							this.syncStateService.updateProgress(
-								processed,
-								failed,
-								skipped,
-								photo.id,
-							);
+							this.syncStateService.updateProgress(processed, failed, skipped, photo.id);
 						}
 
 						const delayMs = this.baseDelayMs * Math.pow(2, attempt);
@@ -536,12 +486,8 @@ export class PhotoSyncService {
 				photoIds: processedPhotoIds,
 			};
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			this.logger.error(
-				{ albumId: this.sourceAlbum, error: errorMessage },
-				'Photo sync failed',
-			);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			this.logger.error({ albumId: this.sourceAlbum, error: errorMessage }, 'Photo sync failed');
 
 			// Emit sync failure to SyncStateService
 			if (this.syncStateService) {
@@ -568,9 +514,7 @@ export class PhotoSyncService {
 
 	async listPhotos(query: PhotoListQuery): Promise<PhotoPage> {
 		const photos = await this.stateStore.getPhotosForAlbum(query.albumId);
-		const sorted = [...photos].sort(
-			(a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt),
-		);
+		const sorted = [...photos].sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt));
 		const total = sorted.length;
 		const startIndex = Math.max(0, (query.page - 1) * query.pageSize);
 		const paged = sorted.slice(startIndex, startIndex + query.pageSize);
@@ -600,9 +544,7 @@ export class PhotoSyncService {
 	 */
 	async fetchAlbumsFromiCloud(): Promise<AlbumSummary[]> {
 		if (!this.ready) {
-			throw new SetupRequiredError(
-				'Cannot fetch albums until iCloud is configured.',
-			);
+			throw new SetupRequiredError('Cannot fetch albums until iCloud is configured.');
 		}
 
 		const albums = await this.iCloudEndpoint.albums;
@@ -620,15 +562,11 @@ export class PhotoSyncService {
 	 */
 	async fetchPhotosFromiCloud(query: PhotoListQuery): Promise<PhotoPage> {
 		if (!this.ready) {
-			throw new SetupRequiredError(
-				'Cannot fetch photos until iCloud is configured.',
-			);
+			throw new SetupRequiredError('Cannot fetch photos until iCloud is configured.');
 		}
 
 		const photos = await this.iCloudEndpoint.listPhotos(query.albumId);
-		const sorted = [...photos].sort(
-			(a, b) => b.lastModified.getTime() - a.lastModified.getTime(),
-		);
+		const sorted = [...photos].sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
 		const total = sorted.length;
 		const startIndex = Math.max(0, (query.page - 1) * query.pageSize);
 		const paged = sorted.slice(startIndex, startIndex + query.pageSize);
@@ -655,17 +593,13 @@ export class PhotoSyncService {
 	async queueManualSync(request: ManualSyncRequest): Promise<SyncAccepted> {
 		if (!this.ready) {
 			throw new SetupRequiredError(
-				this.initializationError?.message ??
-					'Cannot trigger manual sync until setup completes.',
+				this.initializationError?.message ?? 'Cannot trigger manual sync until setup completes.',
 			);
 		}
 
 		const operationId = crypto.randomUUID();
 		const startedAt = new Date().toISOString();
-		const frameId =
-			request.frameHost ??
-			this.currentSettings.frameHost ??
-			this.initialFrameHost;
+		const frameId = request.frameHost ?? this.currentSettings.frameHost ?? this.initialFrameHost;
 
 		await this.stateStore.update((state) => {
 			state.operations[operationId] = {
@@ -691,8 +625,7 @@ export class PhotoSyncService {
 					operation.completedAt = completedAt;
 					operation.status = summary.failed > 0 ? 'failed' : 'succeeded';
 					operation.photoIds = summary.photoIds;
-					operation.error =
-						summary.failed > 0 ? 'One or more photos failed to sync' : null;
+					operation.error = summary.failed > 0 ? 'One or more photos failed to sync' : null;
 				}
 				return state;
 			});
@@ -713,9 +646,7 @@ export class PhotoSyncService {
 		return { operationId };
 	}
 
-	async updateConfiguration(
-		settings: SettingsUpdateRequest,
-	): Promise<SettingsConfigSnapshot> {
+	async updateConfiguration(settings: SettingsUpdateRequest): Promise<SettingsConfigSnapshot> {
 		this.sourceAlbum = settings.syncAlbumName;
 		this.config.iCloud.sourceAlbum = settings.syncAlbumName;
 
@@ -727,10 +658,7 @@ export class PhotoSyncService {
 			this.config.iCloud.username = settings.iCloudUsername.trim();
 		}
 
-		if (
-			typeof settings.iCloudPassword === 'string' &&
-			settings.iCloudPassword.trim().length > 0
-		) {
+		if (typeof settings.iCloudPassword === 'string' && settings.iCloudPassword.trim().length > 0) {
 			this.config.iCloud.password = settings.iCloudPassword;
 		}
 

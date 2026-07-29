@@ -52,10 +52,7 @@ export const prisma =
 if (process.env.NODE_ENV === 'development') {
 	prisma.$on('query' as never, (e: unknown) => {
 		const event = e as { query: string; duration: number };
-		logger.debug(
-			{ query: event.query, duration: event.duration },
-			'Prisma query',
-		);
+		logger.debug({ query: event.query, duration: event.duration }, 'Prisma query');
 	});
 }
 
@@ -97,9 +94,7 @@ export async function testConnection(): Promise<void> {
  * @param fn Function to execute within transaction
  * @returns Promise resolving to function result
  */
-export async function withTransaction<T>(
-	fn: (_tx: TransactionClient) => Promise<T>,
-): Promise<T> {
+export async function withTransaction<T>(fn: (_tx: TransactionClient) => Promise<T>): Promise<T> {
 	return prisma.$transaction(fn);
 }
 
@@ -152,9 +147,7 @@ export async function withTransactionRetry<T>(
 			);
 
 			// Wait before retrying (exponential backoff)
-			await new Promise((resolve) =>
-				setTimeout(resolve, retryDelay * Math.pow(2, attempt)),
-			);
+			await new Promise((resolve) => setTimeout(resolve, retryDelay * Math.pow(2, attempt)));
 		}
 	}
 
@@ -197,9 +190,7 @@ export async function withAtomicOperations<T extends unknown[]>(
  * @returns Promise resolving to updated record
  * @throws Error if version conflict persists after all retries
  */
-export async function withOptimisticLock<
-	T extends { id: string; version?: number },
->(
+export async function withOptimisticLock<T extends { id: string; version?: number }>(
 	model: keyof PrismaClient,
 	id: string,
 	updateFn: (_record: T) => Partial<T>,

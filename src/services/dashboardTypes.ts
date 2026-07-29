@@ -1,7 +1,4 @@
-import type {
-	SyncOperationState,
-	SyncScheduleState,
-} from './SyncStateStore.js';
+import type { SyncOperationState, SyncScheduleState } from './SyncStateStore.js';
 
 export type PhotoStatus = 'pending' | 'uploading' | 'uploaded' | 'failed';
 
@@ -147,9 +144,7 @@ export interface DashboardSyncService {
 	listPhotos(_query: PhotoListQuery): Promise<PhotoPage>;
 	fetchAlbumsFromiCloud(): Promise<AlbumSummary[]>;
 	fetchPhotosFromiCloud(_query: PhotoListQuery): Promise<PhotoPage>;
-	updateConfiguration(
-		_settings: SettingsUpdateRequest,
-	): Promise<SettingsConfigSnapshot>;
+	updateConfiguration(_settings: SettingsUpdateRequest): Promise<SettingsConfigSnapshot>;
 	getCurrentSettings(): SettingsConfigSnapshot;
 	isReady(): boolean;
 	getLastError(): string | null;

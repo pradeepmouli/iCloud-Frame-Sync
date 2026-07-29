@@ -15,19 +15,29 @@ const bootstrapLogger = createLogger({ level: 'warn' });
 
 process.on('unhandledRejection', (reason) => {
 	if (reason instanceof Error && reason.message.includes(suppressedAuthMessage)) {
-		bootstrapLogger.warn({ error: reason.message }, 'Suppressed iCloud authentication rejection while in setup mode');
+		bootstrapLogger.warn(
+			{ error: reason.message },
+			'Suppressed iCloud authentication rejection while in setup mode',
+		);
 		return;
 	}
 	// Log but don't exit - allows server to continue in setup mode
-	const errorDetails = reason instanceof Error
-		? { message: reason.message, stack: reason.stack, name: reason.name }
-		: { raw: reason };
-	bootstrapLogger.warn({ reason: errorDetails }, 'Unhandled promise rejection (non-fatal in setup mode)');
+	const errorDetails =
+		reason instanceof Error
+			? { message: reason.message, stack: reason.stack, name: reason.name }
+			: { raw: reason };
+	bootstrapLogger.warn(
+		{ reason: errorDetails },
+		'Unhandled promise rejection (non-fatal in setup mode)',
+	);
 });
 
 process.on('uncaughtException', (error) => {
 	if (error instanceof Error && error.message.includes(suppressedAuthMessage)) {
-		bootstrapLogger.warn({ error: error.message }, 'Suppressed iCloud authentication exception while in setup mode');
+		bootstrapLogger.warn(
+			{ error: error.message },
+			'Suppressed iCloud authentication exception while in setup mode',
+		);
 		return;
 	}
 	bootstrapLogger.error({ error }, 'Uncaught exception');
@@ -38,23 +48,22 @@ async function main(): Promise<void> {
 	try {
 		const appConfig = createAppConfigFromEnv();
 		const logger = createLogger({ level: appConfig.logLevel });
-		
+
 		// Create SyncStateService early so it can be passed to both Application and web server
 		const syncStateService = new SyncStateService(logger);
 		await syncStateService.initialize();
-		
+
 		const application = new Application(appConfig);
 		await application.start();
 
 		const photoSyncService = application.getPhotoSyncService();
-		
+
 		// SyncStateService is now injected before application.start()
 
-		
 		const syncScheduler = application.getSyncScheduler();
-		
+
 		// SyncStateService is now injected before application.start()
-		
+
 		const stateStore = photoSyncService.getStateStore();
 		const frameDashboardService = new FrameDashboardService(
 			photoSyncService.frame,
@@ -69,7 +78,10 @@ async function main(): Promise<void> {
 		};
 
 		const webServerLogger = createComponentLogger(application.getLogger(), 'WebServer');
-		const connectionTesterLogger = createComponentLogger(application.getLogger(), 'ConnectionTester');
+		const connectionTesterLogger = createComponentLogger(
+			application.getLogger(),
+			'ConnectionTester',
+		);
 
 		const connectionTester = new ConnectionTesterService({
 			logger: connectionTesterLogger,

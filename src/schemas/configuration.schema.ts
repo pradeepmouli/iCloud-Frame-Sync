@@ -14,10 +14,7 @@ import { z } from 'zod';
  */
 export const ICloudConfigSchema = z.object({
 	username: z.string().email('Must be a valid email address').optional(),
-	password: z
-		.string()
-		.min(8, 'Password must be at least 8 characters')
-		.optional(),
+	password: z.string().min(8, 'Password must be at least 8 characters').optional(),
 	sourceAlbum: z.string().optional(),
 });
 
@@ -27,10 +24,7 @@ export const ICloudConfigSchema = z.object({
 export const FrameConfigSchema = z.object({
 	host: z
 		.string()
-		.regex(
-			/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i,
-			'Must be a valid IP address or hostname',
-		)
+		.regex(/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i, 'Must be a valid IP address or hostname')
 		.optional(),
 	port: z.number().int().min(1).max(65535).default(8002),
 });
@@ -47,12 +41,7 @@ export const SyncConfigSchema = z.object({
 		.default(60),
 	enabled: z.boolean().default(false),
 	deleteAfterSync: z.boolean().default(true),
-	maxRetries: z
-		.number()
-		.int()
-		.min(0)
-		.max(10, 'Max retries must be between 0 and 10')
-		.default(3),
+	maxRetries: z.number().int().min(0).max(10, 'Max retries must be between 0 and 10').default(3),
 });
 
 /**
@@ -95,10 +84,7 @@ export const ConfigurationResponseSchema = z.object({
  * Test iCloud Connection Request Schema
  */
 export const TestICloudRequestSchema = z.object({
-	username: z
-		.string()
-		.min(1, 'Username is required')
-		.email('Must be a valid email address'),
+	username: z.string().min(1, 'Username is required').email('Must be a valid email address'),
 	password: z.string().min(1, 'Password is required'),
 	sourceAlbum: z.string().optional(),
 });
@@ -110,15 +96,8 @@ export const TestFrameRequestSchema = z.object({
 	host: z
 		.string()
 		.min(1, 'Host is required')
-		.regex(
-			/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i,
-			'Must be a valid IP address or hostname',
-		),
-	port: z
-		.number()
-		.int()
-		.min(1, 'Port must be at least 1')
-		.max(65535, 'Port must be at most 65535'),
+		.regex(/^(\d{1,3}\.){3}\d{1,3}$|^[a-z0-9\-.]+$/i, 'Must be a valid IP address or hostname'),
+	port: z.number().int().min(1, 'Port must be at least 1').max(65535, 'Port must be at most 65535'),
 });
 
 // TypeScript types inferred from schemas

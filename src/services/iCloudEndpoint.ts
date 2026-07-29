@@ -5,12 +5,7 @@ import type {
 } from 'icloudjs';
 import iCloudService from 'icloudjs';
 import type { Logger } from 'pino';
-import type {
-	Album,
-	Endpoint,
-	iCloudConfig,
-	Photo,
-} from '../types/endpoint.js';
+import type { Album, Endpoint, iCloudConfig, Photo } from '../types/endpoint.js';
 
 import exif from 'exif-reader';
 
@@ -49,9 +44,7 @@ export class iCloudPhoto implements Photo {
 		// T009: Extract last modified timestamp
 		// iCloud asset may have dateCreated or dateModified fields
 		const assetDate =
-			(asset as any).dateModified ||
-			(asset as any).dateCreated ||
-			(asset as any).added;
+			(asset as any).dateModified || (asset as any).dateCreated || (asset as any).added;
 		this.lastModified = assetDate ? new Date(assetDate) : new Date();
 	}
 
@@ -72,10 +65,7 @@ export class iCloudPhoto implements Photo {
 	}
 
 	get thumbnailUrl(): string | undefined {
-		return (
-			(this.asset as any).versions?.thumb?.url ??
-			(this.asset as any)._versions?.thumb?.url
-		);
+		return (this.asset as any).versions?.thumb?.url ?? (this.asset as any)._versions?.thumb?.url;
 	}
 
 	_exifData: exif.Exif | null = null;
@@ -86,9 +76,7 @@ export class iCloudPhoto implements Photo {
 		const data = await this.asset.download('original');
 		if (!data) return null;
 
-		this._exifData = exif(
-			data instanceof ArrayBuffer ? Buffer.from(data) : data,
-		);
+		this._exifData = exif(data instanceof ArrayBuffer ? Buffer.from(data) : data);
 		return this._exifData;
 	}
 
@@ -115,9 +103,7 @@ export class iCloudPhotoAlbum implements Album {
 		// Get photos as a promise that resolves to iCloudPhoto[]
 		this.photos = album
 			.getPhotos()
-			.then((photos: iCloudPhotoAsset[]) =>
-				photos.map((p) => new iCloudPhoto(p)),
-			);
+			.then((photos: iCloudPhotoAsset[]) => photos.map((p) => new iCloudPhoto(p)));
 	}
 }
 
@@ -180,14 +166,10 @@ export class iCloudEndpoint implements Endpoint {
 				await this.iCloudClient.authenticate(username, password);
 
 				if (this.iCloudClient.status === 'MfaRequested') {
-					this.logger.info(
-						'MFA requested, please check your device for the code',
-					);
+					this.logger.info('MFA requested, please check your device for the code');
 					mfaCallback = mfaCallback || this.config.requestMfaCallback;
 					if (!mfaCallback) {
-						throw new Error(
-							'MFA code required but no callback provided to obtain it',
-						);
+						throw new Error('MFA code required but no callback provided to obtain it');
 					}
 					const mfaCode = await mfaCallback();
 					this.logger.info(`Received MFA code: ${mfaCode}`);
@@ -197,9 +179,7 @@ export class iCloudEndpoint implements Endpoint {
 
 			await this.iCloudClient.awaitReady;
 			this.logger.info(this.iCloudClient.status);
-			this.logger.info(
-				'Hello, ' + this.iCloudClient?.accountInfo?.dsInfo?.fullName,
-			);
+			this.logger.info('Hello, ' + this.iCloudClient?.accountInfo?.dsInfo?.fullName);
 		}
 	}
 
@@ -207,17 +187,13 @@ export class iCloudEndpoint implements Endpoint {
 		await this.iCloudClient.provideMfaCode(code);
 		await this.iCloudClient.awaitReady;
 		this.logger.info(this.iCloudClient.status);
-		this.logger.info(
-			'Hello, ' + this.iCloudClient?.accountInfo?.dsInfo?.fullName,
-		);
+		this.logger.info('Hello, ' + this.iCloudClient?.accountInfo?.dsInfo?.fullName);
 	}
 
 	async initialize(): Promise<void> {
 		await this.authenticate(this.config.username, this.config.password);
 		await this.iCloudClient.awaitReady;
-		this.photosService = this.iCloudClient.getService(
-			'photos',
-		) as iCloudPhotosService;
+		this.photosService = this.iCloudClient.getService('photos') as iCloudPhotosService;
 		const albumsMap = await this.photosService.getAlbums();
 		this._albums = new Map(
 			Array.from(albumsMap.entries()).map(([key, album]) => [
@@ -233,9 +209,7 @@ export class iCloudEndpoint implements Endpoint {
 			]),
 		);
 		this.logger.info(
-			`Found ${this._albums.size} albums in iCloud: ${Array.from(
-				this._albums.values(),
-			)
+			`Found ${this._albums.size} albums in iCloud: ${Array.from(this._albums.values())
 				.map((a) => a.name)
 				.join(', ')}`,
 		);
@@ -246,9 +220,7 @@ export class iCloudEndpoint implements Endpoint {
 
 		if (album) {
 			const photos = await album.getPhotos();
-			this._photos = photos.map(
-				(p) => new iCloudPhoto(p as unknown as iCloudPhotoAsset),
-			);
+			this._photos = photos.map((p) => new iCloudPhoto(p as unknown as iCloudPhotoAsset));
 		}
 	}
 
@@ -281,14 +253,8 @@ export class iCloudEndpoint implements Endpoint {
 	 * @param lastSyncTimestamp - Optional ISO timestamp to filter photos modified after this time
 	 * @returns Array of photos from the album, filtered by last modified time if provided
 	 */
-	async listPhotos(
-		albumId: string,
-		lastSyncTimestamp?: string,
-	): Promise<iCloudPhoto[]> {
-		this.logger.debug(
-			{ albumId, lastSyncTimestamp },
-			'Listing photos from album',
-		);
+	async listPhotos(albumId: string, lastSyncTimestamp?: string): Promise<iCloudPhoto[]> {
+		this.logger.debug({ albumId, lastSyncTimestamp }, 'Listing photos from album');
 
 		// Get album by ID or name
 		const album = this._albums.get(albumId);
@@ -303,9 +269,7 @@ export class iCloudEndpoint implements Endpoint {
 		// Filter by lastSyncTimestamp if provided
 		if (lastSyncTimestamp) {
 			const filterDate = new Date(lastSyncTimestamp);
-			const filteredPhotos = photos.filter(
-				(photo) => photo.lastModified > filterDate,
-			);
+			const filteredPhotos = photos.filter((photo) => photo.lastModified > filterDate);
 
 			this.logger.info(
 				{
@@ -320,10 +284,7 @@ export class iCloudEndpoint implements Endpoint {
 			return filteredPhotos;
 		}
 
-		this.logger.info(
-			{ albumId, photoCount: photos.length },
-			'Returning all photos from album',
-		);
+		this.logger.info({ albumId, photoCount: photos.length }, 'Returning all photos from album');
 		return photos;
 	}
 

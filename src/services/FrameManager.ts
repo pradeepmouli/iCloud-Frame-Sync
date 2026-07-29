@@ -35,9 +35,7 @@ export interface FrameManagerOptions<T extends ServicesSchema> {
 	autoStartHeartbeat?: boolean;
 	maxReconnectAttempts?: number;
 	reconnectDelayMs?: number;
-	clientFactory?: (
-		_factoryConfig: SamsungFrameClientOptions<T>,
-	) => SamsungFrameClientType<T>;
+	clientFactory?: (_factoryConfig: SamsungFrameClientOptions<T>) => SamsungFrameClientType<T>;
 }
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -97,10 +95,7 @@ export class FrameManager<
 			1,
 			options.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS,
 		);
-		this.reconnectDelayMs = Math.max(
-			1_000,
-			options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS,
-		);
+		this.reconnectDelayMs = Math.max(1_000, options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS);
 	}
 
 	async initialize(): Promise<void> {
@@ -124,9 +119,7 @@ export class FrameManager<
 				this.client.getDeviceInfo(),
 				this.client.isOn().catch(() => false),
 				this.client.inArtMode().catch(() => false),
-				this.client
-					.getArtModeInfo()
-					.catch(() => undefined as Record<string, unknown> | undefined),
+				this.client.getArtModeInfo().catch(() => undefined as Record<string, unknown> | undefined),
 			]);
 			const responseTimeMs = Math.round(performance.now() - startedAt);
 			const snapshot: FrameHeartbeatSnapshot = {
@@ -151,10 +144,7 @@ export class FrameManager<
 		} catch (error: unknown) {
 			const responseTimeMs = Math.round(performance.now() - startedAt);
 			const message = this.normalizeError(error);
-			this.logger.warn(
-				{ error, host: this.host },
-				'Frame reachability probe failed',
-			);
+			this.logger.warn({ error, host: this.host }, 'Frame reachability probe failed');
 			const snapshot: FrameHeartbeatSnapshot = {
 				lastCheckedAt: Date.now(),
 				isReachable: false,
@@ -232,10 +222,7 @@ export class FrameManager<
 		this.stopHeartbeat();
 		this.heartbeatTimer = setInterval(() => {
 			void this.heartbeat().catch((error) => {
-				this.logger.warn(
-					{ error, host: this.host },
-					'Heartbeat execution failed',
-				);
+				this.logger.warn({ error, host: this.host }, 'Heartbeat execution failed');
 				// Attempt reconnection if we have consecutive failures
 				void this.attemptReconnection();
 			});
@@ -284,9 +271,7 @@ export class FrameManager<
 
 		try {
 			// Wait before attempting reconnection
-			await new Promise((resolve) =>
-				setTimeout(resolve, this.reconnectDelayMs),
-			);
+			await new Promise((resolve) => setTimeout(resolve, this.reconnectDelayMs));
 
 			// Close existing connection
 			await this.client.close().catch(() => {

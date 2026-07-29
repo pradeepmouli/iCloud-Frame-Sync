@@ -95,10 +95,7 @@ export class SyncStateService extends EventEmitter {
 					sessionEndedAt: syncState.sessionEndedAt ?? undefined,
 				};
 
-				this.logger.info(
-					{ state: this.currentState },
-					'Loaded sync state from database',
-				);
+				this.logger.info({ state: this.currentState }, 'Loaded sync state from database');
 			} else {
 				// Create initial state
 				const created = await prisma.syncState.create({
@@ -240,10 +237,7 @@ export class SyncStateService extends EventEmitter {
 		}
 		this.idleResetTimer = setTimeout(async () => {
 			this.idleResetTimer = null;
-			if (
-				this.currentState.status === 'completed' ||
-				this.currentState.status === 'error'
-			) {
+			if (this.currentState.status === 'completed' || this.currentState.status === 'error') {
 				await this.updateState({ status: 'idle' });
 			}
 		}, 3000);

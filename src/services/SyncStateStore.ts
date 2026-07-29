@@ -145,26 +145,17 @@ export class SyncStateStore {
 			// Create default state file if it doesn't exist
 			try {
 				await readFile(this.statePath, 'utf8');
-				this.logger.info(
-					{ statePath: this.statePath },
-					'Existing state file found',
-				);
+				this.logger.info({ statePath: this.statePath }, 'Existing state file found');
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
 					await this.write(DEFAULT_STATE);
-					this.logger.info(
-						{ statePath: this.statePath },
-						'Created default state file',
-					);
+					this.logger.info({ statePath: this.statePath }, 'Created default state file');
 				} else {
 					throw error;
 				}
 			}
 		} catch (error) {
-			this.logger.error(
-				{ error, stateDir: this.stateDir },
-				'Failed to initialize state store',
-			);
+			this.logger.error({ error, stateDir: this.stateDir }, 'Failed to initialize state store');
 			throw new Error(
 				`Failed to initialize SyncStateStore: ${error instanceof Error ? error.message : String(error)}`,
 			);
@@ -184,10 +175,7 @@ export class SyncStateStore {
 			this.logger.debug('State read successfully');
 			return state;
 		} catch (error) {
-			this.logger.error(
-				{ error, statePath: this.statePath },
-				'Failed to read state',
-			);
+			this.logger.error({ error, statePath: this.statePath }, 'Failed to read state');
 			throw new Error(
 				`Failed to read sync state: ${error instanceof Error ? error.message : String(error)}`,
 			);
@@ -214,10 +202,7 @@ export class SyncStateStore {
 
 			this.logger.debug('State written successfully');
 		} catch (error) {
-			this.logger.error(
-				{ error, statePath: this.statePath },
-				'Failed to write state',
-			);
+			this.logger.error({ error, statePath: this.statePath }, 'Failed to write state');
 			throw new Error(
 				`Failed to write sync state: ${error instanceof Error ? error.message : String(error)}`,
 			);
@@ -284,10 +269,7 @@ export class SyncStateStore {
 	 * @param photoId - The photo ID to update
 	 * @param updates - Partial photo state to merge with existing state
 	 */
-	async updatePhotoState(
-		photoId: string,
-		updates: Partial<PhotoState>,
-	): Promise<void> {
+	async updatePhotoState(photoId: string, updates: Partial<PhotoState>): Promise<void> {
 		await this.update((state) => {
 			const existing = state.photos[photoId];
 			state.photos[photoId] = {
@@ -343,9 +325,7 @@ export class SyncStateStore {
 	async getPhotosNeedingSync(maxRetries = 3): Promise<PhotoState[]> {
 		const state = await this.read();
 		return Object.values(state.photos).filter(
-			(p) =>
-				p.status === 'pending' ||
-				(p.status === 'failed' && p.retryCount < maxRetries),
+			(p) => p.status === 'pending' || (p.status === 'failed' && p.retryCount < maxRetries),
 		);
 	}
 
@@ -355,10 +335,7 @@ export class SyncStateStore {
 	 * @param albumId - The album ID to update
 	 * @param updates - Partial album state to merge
 	 */
-	async updateAlbumState(
-		albumId: string,
-		updates: Partial<AlbumState>,
-	): Promise<void> {
+	async updateAlbumState(albumId: string, updates: Partial<AlbumState>): Promise<void> {
 		await this.update((state) => {
 			const existing = state.albums[albumId];
 			state.albums[albumId] = {

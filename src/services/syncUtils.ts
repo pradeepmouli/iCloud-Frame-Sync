@@ -39,25 +39,17 @@ export async function syncPhotosBetweenEndpoints(
 	logger.info(`Sync complete. Uploaded ${uploaded} new photos.`);
 }
 
-export function isPhotoInEndpoint(
-	photo: Photo,
-	endpoint: Endpoint,
-): Promise<boolean> {
+export function isPhotoInEndpoint(photo: Photo, endpoint: Endpoint): Promise<boolean> {
 	return endpoint.photos.then((photos) => {
 		return photos.some((p) => p.id === photo.id);
 	});
 }
 
-export async function getExifDataFromPhoto(
-	photo: Photo,
-): Promise<exifReader.Exif | null> {
-	if (!photo || typeof photo.download !== 'function')
-		return Promise.resolve(null);
+export async function getExifDataFromPhoto(photo: Photo): Promise<exifReader.Exif | null> {
+	if (!photo || typeof photo.download !== 'function') return Promise.resolve(null);
 	return photo.download().then((buffer: Buffer | Uint8Array) => {
 		try {
-			const exif = exifReader(
-				Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer),
-			);
+			const exif = exifReader(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer));
 			return exif;
 		} catch {
 			return null;

@@ -12,9 +12,17 @@ import {
 	TestFrameRequestSchema,
 	TestICloudRequestSchema,
 } from './schemas/configuration.schema.js';
-import { ConfigurationService, type IConfigurationService } from './services/ConfigurationService.js';
+import {
+	ConfigurationService,
+	type IConfigurationService,
+} from './services/ConfigurationService.js';
 import { configurationService as defaultConfigurationService } from './services/ConfigurationService.js';
-import type { ConnectionTester, ConnectionTestResult, FrameConnectionTestRequest, ICloudConnectionTestRequest } from './services/connectionTypes.js';
+import type {
+	ConnectionTester,
+	ConnectionTestResult,
+	FrameConnectionTestRequest,
+	ICloudConnectionTestRequest,
+} from './services/connectionTypes.js';
 import type {
 	AlbumSummary,
 	DashboardSyncService,
@@ -80,10 +88,7 @@ function resolveLogger(config: WebServerConfig, logger?: Logger): Logger {
 	if (logger) {
 		return logger;
 	}
-	return createComponentLogger(
-		createLogger({ level: config.logLevel ?? 'info' }),
-		'WebServer',
-	);
+	return createComponentLogger(createLogger({ level: config.logLevel ?? 'info' }), 'WebServer');
 }
 
 function resolveLatestOperation(
@@ -97,19 +102,13 @@ function resolveLatestOperation(
 		return null;
 	}
 	return values.reduce((latest, candidate) => {
-		const latestTimestamp = Date.parse(
-			latest.completedAt ?? latest.startedAt,
-		);
-		const candidateTimestamp = Date.parse(
-			candidate.completedAt ?? candidate.startedAt,
-		);
+		const latestTimestamp = Date.parse(latest.completedAt ?? latest.startedAt);
+		const candidateTimestamp = Date.parse(candidate.completedAt ?? candidate.startedAt);
 		return candidateTimestamp > latestTimestamp ? candidate : latest;
 	});
 }
 
-function buildScheduleFallback(
-	scheduler: SchedulerView,
-): SyncScheduleState {
+function buildScheduleFallback(scheduler: SchedulerView): SyncScheduleState {
 	const nextRun = scheduler.getNextRunAt();
 	return {
 		nextRunAt: nextRun ? nextRun.toISOString() : new Date().toISOString(),
@@ -118,10 +117,7 @@ function buildScheduleFallback(
 	};
 }
 
-function parsePositiveInteger(
-	value: unknown,
-	fallback: number,
-): number {
+function parsePositiveInteger(value: unknown, fallback: number): number {
 	const numericValue = Number.parseInt(String(value), 10);
 	if (Number.isNaN(numericValue) || numericValue < 1) {
 		return fallback;
@@ -144,28 +140,17 @@ function extractManualSyncRequest(body: unknown): ManualSyncRequest {
 	return request;
 }
 
-function extractSettingsUpdate(
-	body: unknown,
-	logger: Logger,
-): SettingsUpdateRequest | null {
+function extractSettingsUpdate(body: unknown, logger: Logger): SettingsUpdateRequest | null {
 	if (typeof body !== 'object' || body === null) {
 		return null;
 	}
 	const payload = body as Record<string, unknown>;
 	const syncAlbumName =
-		typeof payload.syncAlbumName === 'string'
-			? payload.syncAlbumName.trim()
-			: '';
-	const frameHost =
-		typeof payload.frameHost === 'string'
-			? payload.frameHost.trim()
-			: '';
+		typeof payload.syncAlbumName === 'string' ? payload.syncAlbumName.trim() : '';
+	const frameHost = typeof payload.frameHost === 'string' ? payload.frameHost.trim() : '';
 
 	if (syncAlbumName.length === 0 || frameHost.length === 0) {
-		logger.warn(
-			{ payload },
-			'Received invalid settings update payload (missing required fields)',
-		);
+		logger.warn({ payload }, 'Received invalid settings update payload (missing required fields)');
 		return null;
 	}
 
@@ -233,9 +218,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isICloudConnectionRequest(
-	value: unknown,
-): value is ICloudConnectionTestRequest {
+function isICloudConnectionRequest(value: unknown): value is ICloudConnectionTestRequest {
 	if (!isPlainObject(value)) {
 		return false;
 	}
@@ -250,9 +233,7 @@ function isICloudConnectionRequest(
 	return typeof request.password === 'string' && request.password.length > 0;
 }
 
-function isFrameConnectionRequest(
-	value: unknown,
-): value is FrameConnectionTestRequest {
+function isFrameConnectionRequest(value: unknown): value is FrameConnectionTestRequest {
 	if (!isPlainObject(value)) {
 		return false;
 	}
@@ -260,10 +241,7 @@ function isFrameConnectionRequest(
 	return typeof host === 'string' && host.trim().length > 0;
 }
 
-
-function normalizeICloudRequest(
-	request: ICloudConnectionTestRequest,
-): ICloudConnectionTestRequest {
+function normalizeICloudRequest(request: ICloudConnectionTestRequest): ICloudConnectionTestRequest {
 	request.username = request.username.trim();
 	if (typeof request.sessionId === 'string') {
 		request.sessionId = request.sessionId.trim();
@@ -274,16 +252,12 @@ function normalizeICloudRequest(
 	return request;
 }
 
-function normalizeFrameRequest(
-	request: FrameConnectionTestRequest,
-): FrameConnectionTestRequest {
+function normalizeFrameRequest(request: FrameConnectionTestRequest): FrameConnectionTestRequest {
 	request.host = request.host.trim();
 	return request;
 }
 
-export async function createWebServer(
-	options: CreateWebServerOptions,
-): Promise<Express> {
+export async function createWebServer(options: CreateWebServerOptions): Promise<Express> {
 	const {
 		config,
 		stateStore,
@@ -325,7 +299,10 @@ export async function createWebServer(
 		const start = Date.now();
 		const requestId = crypto.randomUUID();
 		const safeBody = redactSensitiveFields(req.body);
-		logger.info({ requestId, method: req.method, url: req.originalUrl, body: safeBody }, 'HTTP request');
+		logger.info(
+			{ requestId, method: req.method, url: req.originalUrl, body: safeBody },
+			'HTTP request',
+		);
 
 		res.on('finish', () => {
 			const durationMs = Date.now() - start;
@@ -398,11 +375,7 @@ export async function createWebServer(
 		async (req: Request, res: Response) => {
 			try {
 				const { username, password, sourceAlbum } = req.body;
-				const result = await configService.testICloudConnection(
-					username,
-					password,
-					sourceAlbum,
-				);
+				const result = await configService.testICloudConnection(username, password, sourceAlbum);
 				res.json(result);
 			} catch (error) {
 				logger.error({ error }, 'iCloud connection test failed');
@@ -438,7 +411,6 @@ export async function createWebServer(
 
 	// ========== Authentication Endpoints ==========
 
-
 	app.post('/api/auth/icloud', async (req: Request, res: Response) => {
 		pruneExpiredSessions();
 		const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
@@ -457,10 +429,7 @@ export async function createWebServer(
 			sourceAlbum: snapshot?.syncAlbumName ?? 'Frame Sync',
 			dataDirectory: path.resolve('data'),
 		};
-		const endpoint = createEndpoint(
-			endpointConfig,
-			loggerChild.child({ name: 'iCloudAuth' }),
-		);
+		const endpoint = createEndpoint(endpointConfig, loggerChild.child({ name: 'iCloudAuth' }));
 
 		try {
 			await endpoint.authenticate(endpointConfig.username, endpointConfig.password, async () => {
@@ -483,7 +452,12 @@ export async function createWebServer(
 			});
 		} catch (error) {
 			if (error instanceof MfaRequiredError) {
-				res.json({ success: false, requiresMfa: true, sessionId: error.sessionId, status: endpoint.status });
+				res.json({
+					success: false,
+					requiresMfa: true,
+					sessionId: error.sessionId,
+					status: endpoint.status,
+				});
 				return;
 			}
 
@@ -581,7 +555,9 @@ export async function createWebServer(
 			}
 			const snapshot = photoSyncService.getCurrentSettings();
 			if (!snapshot.isConfigured) {
-				res.status(503).json({ error: 'Configuration incomplete', missingFields: snapshot.missingFields });
+				res
+					.status(503)
+					.json({ error: 'Configuration incomplete', missingFields: snapshot.missingFields });
 				return;
 			}
 			await syncStateService.startSync(0); // totalPhotos unknown until PhotoSyncService runs
@@ -601,7 +577,9 @@ export async function createWebServer(
 			}
 			// Attempt to stop scheduler if running
 			if (syncScheduler.isRunning()) {
-				try { await syncScheduler.stop(); } catch (schedulerError) {
+				try {
+					await syncScheduler.stop();
+				} catch (schedulerError) {
 					logger.warn({ error: schedulerError }, 'Failed to stop scheduler gracefully');
 				}
 			}
@@ -668,12 +646,12 @@ export async function createWebServer(
 						albumId,
 						page,
 						pageSize,
-				  } satisfies PhotoListQuery)
+					} satisfies PhotoListQuery)
 				: await photoSyncService.listPhotos({
 						albumId,
 						page,
 						pageSize,
-				  } satisfies PhotoListQuery);
+					} satisfies PhotoListQuery);
 			res.json(photoPage satisfies PhotoPage);
 		} catch (error) {
 			logger.error({ error, albumId, page, pageSize, refresh }, 'Failed to list photos');
@@ -701,7 +679,10 @@ export async function createWebServer(
 				try {
 					await syncScheduler.start();
 				} catch (startError) {
-					logger.error({ error: startError }, 'Failed to start scheduler after configuration update');
+					logger.error(
+						{ error: startError },
+						'Failed to start scheduler after configuration update',
+					);
 				}
 			}
 			res.json({ success: true, config: snapshot satisfies SettingsConfigSnapshot });
@@ -723,9 +704,7 @@ export async function createWebServer(
 
 	app.post('/api/frame/power', async (req: Request, res: Response) => {
 		const action =
-			typeof req.body?.action === 'string'
-				? (req.body.action as FramePowerAction)
-				: null;
+			typeof req.body?.action === 'string' ? (req.body.action as FramePowerAction) : null;
 
 		if (!action || !['on', 'off', 'toggle'].includes(action)) {
 			res.status(400).json({ error: 'action must be one of on, off, or toggle' });
@@ -744,10 +723,7 @@ export async function createWebServer(
 	app.get('/api/frame/art', async (req: Request, res: Response) => {
 		const page = parsePositiveInteger(req.query.page, 1);
 		const pageSize = parsePositiveInteger(req.query.pageSize, 24);
-		const categoryId =
-			typeof req.query.categoryId === 'string'
-				? req.query.categoryId
-				: undefined;
+		const categoryId = typeof req.query.categoryId === 'string' ? req.query.categoryId : undefined;
 
 		try {
 			const artPage = await frameDashboardService.listArt({
@@ -842,7 +818,7 @@ export async function createWebServer(
 			icloud?: unknown;
 			frame?: unknown;
 		};
-		const icloudPayload = (icloud ?? (req.body as Record<string, unknown>).iCloud) ?? null;
+		const icloudPayload = icloud ?? (req.body as Record<string, unknown>).iCloud ?? null;
 		const framePayload = frame ?? null;
 
 		if (!isICloudConnectionRequest(icloudPayload) || !isFrameConnectionRequest(framePayload)) {
@@ -874,7 +850,8 @@ export async function createWebServer(
 			};
 		}
 
-		const overall = icloudResult.success === true && frameResult.success === true ? 'ready' : 'attention';
+		const overall =
+			icloudResult.success === true && frameResult.success === true ? 'ready' : 'attention';
 
 		res.json({
 			overall,

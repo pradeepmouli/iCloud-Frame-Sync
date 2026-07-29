@@ -70,18 +70,13 @@ export interface ConnectionTestResult {
  */
 export interface IConfigurationService {
 	getConfiguration(): Promise<ConfigurationResponse>;
-	updateConfiguration(
-		updates: ConfigurationUpdateRequest,
-	): Promise<ConfigurationResponse>;
+	updateConfiguration(updates: ConfigurationUpdateRequest): Promise<ConfigurationResponse>;
 	testICloudConnection(
 		username: string,
 		password: string,
 		sourceAlbum?: string,
 	): Promise<ConnectionTestResult>;
-	testFrameConnection(
-		host: string,
-		port?: number,
-	): Promise<ConnectionTestResult>;
+	testFrameConnection(host: string, port?: number): Promise<ConnectionTestResult>;
 }
 
 /**
@@ -191,9 +186,7 @@ export class ConfigurationService implements IConfigurationService {
 	/**
 	 * Update configuration with flat field names
 	 */
-	async updateConfiguration(
-		updates: ConfigurationUpdateRequest,
-	): Promise<ConfigurationResponse> {
+	async updateConfiguration(updates: ConfigurationUpdateRequest): Promise<ConfigurationResponse> {
 		logger.info(
 			{
 				updates: {
@@ -275,10 +268,7 @@ export class ConfigurationService implements IConfigurationService {
 					hasPassword: Boolean(config.icloudPassword),
 				};
 			} catch (error) {
-				logger.warn(
-					{ error },
-					'Failed to update configuration in database, using in-memory',
-				);
+				logger.warn({ error }, 'Failed to update configuration in database, using in-memory');
 				// Fall through to in-memory response
 			}
 		}
@@ -313,9 +303,7 @@ export class ConfigurationService implements IConfigurationService {
 				};
 			}
 
-			logger.warn(
-				'iCloud connection test not yet implemented - returning mock success',
-			);
+			logger.warn('iCloud connection test not yet implemented - returning mock success');
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -329,8 +317,7 @@ export class ConfigurationService implements IConfigurationService {
 			logger.error({ error }, 'iCloud connection test failed');
 			return {
 				success: false,
-				message:
-					error instanceof Error ? error.message : 'Connection test failed',
+				message: error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}
@@ -338,10 +325,7 @@ export class ConfigurationService implements IConfigurationService {
 	/**
 	 * Test Frame TV connection without saving
 	 */
-	async testFrameConnection(
-		host: string,
-		port: number = 8002,
-	): Promise<ConnectionTestResult> {
+	async testFrameConnection(host: string, port: number = 8002): Promise<ConnectionTestResult> {
 		logger.info({ host, port }, 'Testing Frame TV connection');
 
 		try {
@@ -359,9 +343,7 @@ export class ConfigurationService implements IConfigurationService {
 				};
 			}
 
-			logger.warn(
-				'Frame TV connection test not yet implemented - returning mock success',
-			);
+			logger.warn('Frame TV connection test not yet implemented - returning mock success');
 			return {
 				success: true,
 				message: 'Connection test not yet implemented',
@@ -375,8 +357,7 @@ export class ConfigurationService implements IConfigurationService {
 			logger.error({ error }, 'Frame TV connection test failed');
 			return {
 				success: false,
-				message:
-					error instanceof Error ? error.message : 'Connection test failed',
+				message: error instanceof Error ? error.message : 'Connection test failed',
 			};
 		}
 	}

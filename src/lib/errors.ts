@@ -37,9 +37,7 @@ export class MfaRequiredError extends Error {
 /**
  * Safely close an endpoint, swallowing any errors that occur during close.
  */
-export async function safeClose(endpoint: {
-	close: () => Promise<void>;
-}): Promise<void> {
+export async function safeClose(endpoint: { close: () => Promise<void> }): Promise<void> {
 	try {
 		await endpoint.close();
 	} catch {

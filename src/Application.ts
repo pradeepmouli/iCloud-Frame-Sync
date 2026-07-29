@@ -20,16 +20,16 @@ export class Application {
 	private isStopping = false;
 	private hasStopped = false;
 
-	constructor (
+	constructor(
 		config: AppConfig,
 		overrides?: {
-			photoSyncService?: PhotoSyncService,
-			syncScheduler?: SyncScheduler,
-			frameEndpoint?: any,
-			iCloudEndpoint?: any,
-			stateStore?: any,
-			logger?: any,
-		}
+			photoSyncService?: PhotoSyncService;
+			syncScheduler?: SyncScheduler;
+			frameEndpoint?: any;
+			iCloudEndpoint?: any;
+			stateStore?: any;
+			logger?: any;
+		},
 	) {
 		this.config = config;
 		this.logger = overrides?.logger ?? createLogger({ level: config.logLevel });
@@ -38,15 +38,11 @@ export class Application {
 		if (overrides?.photoSyncService) {
 			this.photoSyncService = overrides.photoSyncService;
 		} else {
-			this.photoSyncService = new PhotoSyncService(
-				config,
-				this.logger,
-				{
-					frameEndpoint: overrides?.frameEndpoint,
-					iCloudEndpoint: overrides?.iCloudEndpoint,
-					stateStore: overrides?.stateStore,
-				}
-			);
+			this.photoSyncService = new PhotoSyncService(config, this.logger, {
+				frameEndpoint: overrides?.frameEndpoint,
+				iCloudEndpoint: overrides?.iCloudEndpoint,
+				stateStore: overrides?.stateStore,
+			});
 		}
 		if (overrides?.syncScheduler) {
 			this.syncScheduler = overrides.syncScheduler;
@@ -68,7 +64,10 @@ export class Application {
 		try {
 			await this.photoSyncService.initialize();
 		} catch (error) {
-			this.logger.error({ error }, 'Photo sync service failed to initialize. Continuing in setup mode.');
+			this.logger.error(
+				{ error },
+				'Photo sync service failed to initialize. Continuing in setup mode.',
+			);
 			return;
 		}
 
@@ -123,14 +122,16 @@ export class Application {
 
 		this.sigintHandler = async (_signal) => {
 			this.logger.info('SIGINT received, closing connection...');
-			setTimeout(5000, undefined, { signal }).then(() => {
-				this.logger.info('Force closing connection...');
-				process.exit(1);
-			}).catch((error) => {
-				if (error?.name !== 'AbortError') {
-					this.logger.error({ error }, 'Force close timer failed');
-				}
-			});
+			setTimeout(5000, undefined, { signal })
+				.then(() => {
+					this.logger.info('Force closing connection...');
+					process.exit(1);
+				})
+				.catch((error) => {
+					if (error?.name !== 'AbortError') {
+						this.logger.error({ error }, 'Force close timer failed');
+					}
+				});
 			try {
 				await this.stop();
 				process.exit(0);

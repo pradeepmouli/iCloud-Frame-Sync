@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Run ESLint
+      - name: Run oxlint
         run: npm run lint
 
   test-unit:

@@ -27,12 +27,8 @@ export interface ConnectionTestResult {
 }
 
 export interface ConnectionTester {
-	testICloudConnection: (
-		_request: ICloudConnectionTestRequest,
-	) => Promise<ConnectionTestResult>;
-	testFrameConnection: (
-		_request: FrameConnectionTestRequest,
-	) => Promise<ConnectionTestResult>;
+	testICloudConnection: (_request: ICloudConnectionTestRequest) => Promise<ConnectionTestResult>;
+	testFrameConnection: (_request: FrameConnectionTestRequest) => Promise<ConnectionTestResult>;
 }
 
 export interface ConnectionTestResponse {

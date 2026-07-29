@@ -4,11 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Logger } from 'pino';
 
-import {
-	MfaRequiredError,
-	resolveErrorMessage,
-	safeClose,
-} from '../lib/errors.js';
+import { MfaRequiredError, resolveErrorMessage, safeClose } from '../lib/errors.js';
 import type { FrameConfig, iCloudConfig } from '../types/endpoint.js';
 import type {
 	ConnectionTestResult,
@@ -30,14 +26,8 @@ interface PendingICloudSession {
 
 export interface ConnectionTesterOptions {
 	logger: Logger;
-	createICloudEndpoint?: (
-		_config: iCloudConfig,
-		_logger: Logger,
-	) => iCloudEndpoint;
-	createFrameEndpoint?: (
-		_config: FrameConfig,
-		_logger: Logger,
-	) => FrameEndpoint;
+	createICloudEndpoint?: (_config: iCloudConfig, _logger: Logger) => iCloudEndpoint;
+	createFrameEndpoint?: (_config: FrameConfig, _logger: Logger) => FrameEndpoint;
 	defaultAlbum?: string;
 	dataDirectory?: string;
 	sessionTtlMs?: number;
@@ -45,14 +35,8 @@ export interface ConnectionTesterOptions {
 
 export class ConnectionTesterService implements ConnectionTester {
 	private readonly logger: Logger;
-	private readonly createICloudEndpoint: (
-		_config: iCloudConfig,
-		_logger: Logger,
-	) => iCloudEndpoint;
-	private readonly createFrameEndpoint: (
-		_config: FrameConfig,
-		_logger: Logger,
-	) => FrameEndpoint;
+	private readonly createICloudEndpoint: (_config: iCloudConfig, _logger: Logger) => iCloudEndpoint;
+	private readonly createFrameEndpoint: (_config: FrameConfig, _logger: Logger) => FrameEndpoint;
 	private readonly defaultAlbum: string;
 	private readonly dataDirectory: string;
 	private readonly sessionTtlMs: number;
@@ -62,24 +46,16 @@ export class ConnectionTesterService implements ConnectionTester {
 		this.logger = options.logger;
 		this.createICloudEndpoint =
 			options.createICloudEndpoint ??
-			((_config: iCloudConfig, _logger: Logger) =>
-				new iCloudEndpoint(_config, _logger));
+			((_config: iCloudConfig, _logger: Logger) => new iCloudEndpoint(_config, _logger));
 		this.createFrameEndpoint =
 			options.createFrameEndpoint ??
-			((_config: FrameConfig, _logger: Logger) =>
-				new FrameEndpoint(_config, _logger));
+			((_config: FrameConfig, _logger: Logger) => new FrameEndpoint(_config, _logger));
 		this.defaultAlbum = options.defaultAlbum ?? DEFAULT_ICLOUD_ALBUM;
-		this.dataDirectory =
-			options.dataDirectory ?? path.resolve('data', 'connection-tests');
-		this.sessionTtlMs = Math.max(
-			1000,
-			options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS,
-		);
+		this.dataDirectory = options.dataDirectory ?? path.resolve('data', 'connection-tests');
+		this.sessionTtlMs = Math.max(1000, options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS);
 	}
 
-	async testICloudConnection(
-		request: ICloudConnectionTestRequest,
-	): Promise<ConnectionTestResult> {
+	async testICloudConnection(request: ICloudConnectionTestRequest): Promise<ConnectionTestResult> {
 		const username = request.username?.trim();
 		if (!username) {
 			return {
@@ -167,9 +143,7 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 	}
 
-	async testFrameConnection(
-		request: FrameConnectionTestRequest,
-	): Promise<ConnectionTestResult> {
+	async testFrameConnection(request: FrameConnectionTestRequest): Promise<ConnectionTestResult> {
 		const host = request.host?.trim();
 		if (!host) {
 			return {
@@ -216,10 +190,7 @@ export class ConnectionTesterService implements ConnectionTester {
 		}
 	}
 
-	private async verifyICloudMfa(
-		sessionId: string,
-		code: string,
-	): Promise<ConnectionTestResult> {
+	private async verifyICloudMfa(sessionId: string, code: string): Promise<ConnectionTestResult> {
 		const session = this.sessions.get(sessionId);
 		if (!session) {
 			return {
@@ -287,10 +258,7 @@ export class ConnectionTesterService implements ConnectionTester {
 		};
 	}
 
-	private createChildLogger(
-		name: string,
-		bindings: Record<string, unknown>,
-	): Logger {
+	private createChildLogger(name: string, bindings: Record<string, unknown>): Logger {
 		if (typeof this.logger.child === 'function') {
 			return this.logger.child({ component: name, ...bindings });
 		}

@@ -26,14 +26,9 @@ export class ThumbnailService {
 	async initialize(): Promise<void> {
 		try {
 			await mkdir(this.cacheDir, { recursive: true });
-			this.logger.info(
-				`Thumbnail cache directory initialized: ${this.cacheDir}`,
-			);
+			this.logger.info(`Thumbnail cache directory initialized: ${this.cacheDir}`);
 		} catch (error) {
-			this.logger.error(
-				{ error },
-				'Failed to initialize thumbnail cache directory',
-			);
+			this.logger.error({ error }, 'Failed to initialize thumbnail cache directory');
 			throw error;
 		}
 	}
@@ -56,10 +51,7 @@ export class ThumbnailService {
 	/**
 	 * Check if a thumbnail exists in cache
 	 */
-	async hasCachedThumbnail(
-		contentId: string,
-		options: ThumbnailOptions = {},
-	): Promise<boolean> {
+	async hasCachedThumbnail(contentId: string, options: ThumbnailOptions = {}): Promise<boolean> {
 		const cacheKey = this.getCacheKey(contentId, options);
 		const cachePath = this.getCachePath(cacheKey);
 		return existsSync(cachePath);
@@ -83,10 +75,7 @@ export class ThumbnailService {
 			this.logger.debug(`Cache miss for thumbnail: ${cacheKey}`);
 			return null;
 		} catch (error) {
-			this.logger.error(
-				{ error, contentId, cacheKey },
-				'Failed to read cached thumbnail',
-			);
+			this.logger.error({ error, contentId, cacheKey }, 'Failed to read cached thumbnail');
 			return null;
 		}
 	}
@@ -102,10 +91,7 @@ export class ThumbnailService {
 		const { width = 300, height = 300, fit = 'cover', quality = 80 } = options;
 
 		try {
-			this.logger.debug(
-				{ contentId, width, height, fit, quality },
-				'Generating thumbnail',
-			);
+			this.logger.debug({ contentId, width, height, fit, quality }, 'Generating thumbnail');
 
 			const thumbnail = await sharp(imageBuffer)
 				.resize(width, height, { fit })
@@ -120,10 +106,7 @@ export class ThumbnailService {
 				await writeFile(cachePath, thumbnail);
 				this.logger.debug(`Cached thumbnail: ${cacheKey}`);
 			} catch (cacheError) {
-				this.logger.warn(
-					{ error: cacheError, cacheKey },
-					'Failed to cache thumbnail',
-				);
+				this.logger.warn({ error: cacheError, cacheKey }, 'Failed to cache thumbnail');
 				// Continue even if caching fails
 			}
 
@@ -164,10 +147,7 @@ export class ThumbnailService {
 			await Promise.all(
 				files.map((file) =>
 					unlink(path.join(this.cacheDir, file)).catch((error) => {
-						this.logger.warn(
-							{ error, file },
-							'Failed to delete cached thumbnail',
-						);
+						this.logger.warn({ error, file }, 'Failed to delete cached thumbnail');
 					}),
 				),
 			);

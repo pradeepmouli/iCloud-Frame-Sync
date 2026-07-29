@@ -240,18 +240,11 @@ export class SyncScheduler {
 					if (i !== j) {
 						const targetEndpoint = this.endpoints[j];
 						if (!targetEndpoint) {
-							this.logger.warn(
-								{ index: j },
-								'Target endpoint undefined, skipping',
-							);
+							this.logger.warn({ index: j }, 'Target endpoint undefined, skipping');
 							continue;
 						}
 
-						await syncPhotosBetweenEndpoints(
-							sourceEndpoint,
-							targetEndpoint,
-							this.logger,
-						);
+						await syncPhotosBetweenEndpoints(sourceEndpoint, targetEndpoint, this.logger);
 					}
 				}
 			}
@@ -399,10 +392,7 @@ export class SyncScheduler {
 		if (this.isRunning()) {
 			this.stop();
 			this.start().catch((error) => {
-				this.logger.error(
-					{ error },
-					'Failed to restart scheduler after interval update',
-				);
+				this.logger.error({ error }, 'Failed to restart scheduler after interval update');
 			});
 		}
 	}

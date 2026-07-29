@@ -44,38 +44,27 @@ export class FrameDashboardService {
 		const host = this.frameEndpoint.getHost();
 		const timestamp = new Date().toISOString();
 
-		const [
-			deviceInfoResult,
-			isOnResult,
-			artModeResult,
-			brightnessResult,
-			currentArtResult,
-		] = await Promise.allSettled([
-			this.frameEndpoint.getDeviceInfo(),
-			this.frameEndpoint.isOn(),
-			this.frameEndpoint.inArtMode(),
-			this.frameEndpoint.getBrightness(),
-			this.frameEndpoint.getCurrentArt(),
-		]);
+		const [deviceInfoResult, isOnResult, artModeResult, brightnessResult, currentArtResult] =
+			await Promise.allSettled([
+				this.frameEndpoint.getDeviceInfo(),
+				this.frameEndpoint.isOn(),
+				this.frameEndpoint.inArtMode(),
+				this.frameEndpoint.getBrightness(),
+				this.frameEndpoint.getCurrentArt(),
+			]);
 
 		const snapshot: FrameStatusSnapshot = {
 			host,
-			isReachable:
-				deviceInfoResult.status === 'fulfilled' ||
-				isOnResult.status === 'fulfilled',
+			isReachable: deviceInfoResult.status === 'fulfilled' || isOnResult.status === 'fulfilled',
 			isOn: isOnResult.status === 'fulfilled' ? isOnResult.value : false,
-			inArtMode:
-				artModeResult.status === 'fulfilled' ? artModeResult.value : false,
-			brightness:
-				brightnessResult.status === 'fulfilled' ? brightnessResult.value : null,
+			inArtMode: artModeResult.status === 'fulfilled' ? artModeResult.value : false,
+			brightness: brightnessResult.status === 'fulfilled' ? brightnessResult.value : null,
 			currentArt:
 				currentArtResult.status === 'fulfilled' && currentArtResult.value
 					? this.mapArtSummary(currentArtResult.value)
 					: null,
 			device:
-				deviceInfoResult.status === 'fulfilled'
-					? this.mapDeviceInfo(deviceInfoResult.value)
-					: null,
+				deviceInfoResult.status === 'fulfilled' ? this.mapDeviceInfo(deviceInfoResult.value) : null,
 			lastCheckedAt: timestamp,
 		};
 
@@ -84,9 +73,7 @@ export class FrameDashboardService {
 		return snapshot;
 	}
 
-	async setPowerState(
-		action: FramePowerAction,
-	): Promise<FramePowerStateResponse> {
+	async setPowerState(action: FramePowerAction): Promise<FramePowerStateResponse> {
 		const before = await this.frameEndpoint.isOn();
 		let wasToggled = false;
 
@@ -130,9 +117,7 @@ export class FrameDashboardService {
 		};
 	}
 
-	async uploadArt(
-		request: FrameArtUploadRequest,
-	): Promise<FrameArtUploadResult> {
+	async uploadArt(request: FrameArtUploadRequest): Promise<FrameArtUploadResult> {
 		if (!request.data) {
 			throw new Error('Upload payload missing base64 data');
 		}
@@ -165,9 +150,7 @@ export class FrameDashboardService {
 		return this.frameEndpoint.getThumbnail(artId);
 	}
 
-	private async persistDeviceState(
-		snapshot: FrameStatusSnapshot,
-	): Promise<void> {
+	private async persistDeviceState(snapshot: FrameStatusSnapshot): Promise<void> {
 		try {
 			await this.stateStore.update((state) => {
 				const existing = state.frames[this.frameId];
@@ -178,10 +161,7 @@ export class FrameDashboardService {
 						? snapshot.lastCheckedAt
 						: (existing?.connectedAt ?? null),
 					status: snapshot.isReachable ? 'connected' : 'disconnected',
-					firmwareVersion:
-						snapshot.device?.firmwareVersion ??
-						existing?.firmwareVersion ??
-						null,
+					firmwareVersion: snapshot.device?.firmwareVersion ?? existing?.firmwareVersion ?? null,
 				};
 				return state;
 			});
@@ -199,22 +179,12 @@ export class FrameDashboardService {
 		return {
 			name: this.pickString(record, ['device_name', 'deviceName', 'name']),
 			model: this.pickString(record, ['model', 'modelName', 'ModelName']),
-			serialNumber: this.pickString(record, [
-				'serial',
-				'serialNumber',
-				'SerialNumber',
-			]),
-			firmwareVersion: this.pickString(record, [
-				'firmwareVersion',
-				'FirmwareVersion',
-				'version',
-			]),
+			serialNumber: this.pickString(record, ['serial', 'serialNumber', 'SerialNumber']),
+			firmwareVersion: this.pickString(record, ['firmwareVersion', 'FirmwareVersion', 'version']),
 		};
 	}
 
-	private mapArtSummary(
-		item: ArtContentItem | null | undefined,
-	): FrameArtSummary | null {
+	private mapArtSummary(item: ArtContentItem | null | undefined): FrameArtSummary | null {
 		if (!item) {
 			return null;
 		}
@@ -223,8 +193,7 @@ export class FrameDashboardService {
 		return {
 			id: String(item.id),
 			name: this.pickString(record, ['title', 'name']) ?? 'Unnamed Art',
-			categoryId:
-				this.pickString(record, ['category_id', 'categoryId']) ?? undefined,
+			categoryId: this.pickString(record, ['category_id', 'categoryId']) ?? undefined,
 			width: typeof item.width === 'number' ? item.width : undefined,
 			height: typeof item.height === 'number' ? item.height : undefined,
 			isFavorite: this.pickBoolean(record, ['favorite', 'isFavorite']),
@@ -233,9 +202,7 @@ export class FrameDashboardService {
 		};
 	}
 
-	private extractMatte(
-		item: Record<string, unknown>,
-	): FrameArtSummary['matte'] {
+	private extractMatte(item: Record<string, unknown>): FrameArtSummary['matte'] {
 		const matte = item['matte'] ?? item['matte_info'];
 		if (!matte || typeof matte !== 'object') {
 			return null;
@@ -247,10 +214,7 @@ export class FrameDashboardService {
 		};
 	}
 
-	private pickString(
-		source: Record<string, unknown>,
-		keys: string[],
-	): string | undefined {
+	private pickString(source: Record<string, unknown>, keys: string[]): string | undefined {
 		for (const key of keys) {
 			const value = source[key];
 			if (typeof value === 'string' && value.trim().length > 0) {
@@ -260,10 +224,7 @@ export class FrameDashboardService {
 		return undefined;
 	}
 
-	private pickBoolean(
-		source: Record<string, unknown>,
-		keys: string[],
-	): boolean | undefined {
+	private pickBoolean(source: Record<string, unknown>, keys: string[]): boolean | undefined {
 		for (const key of keys) {
 			const value = source[key];
 			if (typeof value === 'boolean') {
